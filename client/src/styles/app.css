@@ -551,6 +551,85 @@ input:focus {
   background: var(--text-dim);
 }
 
+/* Play/Paused Overlay */
+.play-paused-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 25;
+}
+
+.play-paused-inner {
+  text-align: center;
+  color: white;
+}
+
+.play-paused-inner .play-icon {
+  font-size: 56px;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.play-paused-inner p {
+  font-size: 15px;
+  opacity: 0.85;
+}
+
+/* Click to Play Overlay */
+.click-to-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 30;
+  cursor: pointer;
+}
+
+.click-to-play-inner {
+  text-align: center;
+  color: white;
+}
+
+.play-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.click-to-play-inner p {
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+/* Player Controls */
+.player-controls {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 10;
+}
+
+.mute-btn {
+  padding: 6px 10px;
+  font-size: 18px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  border: 1px solid var(--border);
+  color: white;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.mute-btn:hover {
+  background: rgba(50, 50, 50, 0.9);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .app {

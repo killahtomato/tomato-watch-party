@@ -82,7 +82,9 @@ export default function HostControls({ emit, on }) {
             {playbackState.isPlaying ? (
               <button onClick={handlePause}>Pause</button>
             ) : (
-              <button onClick={handleResume}>Resume</button>
+              <button onClick={handleResume}>
+                {playbackState.currentTime > 0 ? 'Resume' : 'Play'}
+              </button>
             )}
           </>
         )}

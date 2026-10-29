@@ -95,11 +95,12 @@ export async function playMovie(movieName) {
     '-c:v', 'libx264',
     '-preset', 'ultrafast',
     '-tune', 'zerolatency',
+    '-force_key_frames', 'expr:gte(t,n_forced*4)',
     '-c:a', 'aac',
     '-b:a', '128k',
     '-hls_time', '4',
     '-hls_list_size', '0',
-    '-hls_flags', 'delete_segments+omit_endlist',
+    '-hls_flags', 'omit_endlist+independent_segments',
     '-f', 'hls',
     outputPath,
   ]);
@@ -110,8 +111,8 @@ export async function playMovie(movieName) {
   });
 
   currentMovie = movieName;
-  isPlaying = true;
-  playbackStartTime = Date.now();
+  isPlaying = false;
+  playbackStartTime = null;
   playbackOffset = 0;
 
   return getPlaybackState();
