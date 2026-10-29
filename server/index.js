@@ -8,6 +8,7 @@ import { dirname, join } from 'path';
 import { setupSocketHandlers } from './socketHandlers.js';
 import { authenticateHost } from './auth.js';
 import { getMovieList, getHlsDir } from './streamManager.js';
+import { logger } from './logger.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: join(__dirname, '..', '.env') });
@@ -20,11 +21,11 @@ const io = new Server(httpServer, {
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static('../client/dist'));
+app.use(express.static(join(__dirname, '..', 'client', 'dist')));
 app.use('/hls', express.static(getHlsDir()));
 
-app.get('/api/movies', (req, res) => {
-  res.json(getMovieList());
+app.get('/api/movies', async (req, res) => {
+  res.json(await getMovieList());
 });
 
 app.post('/api/host/login', (req, res) => {
@@ -41,5 +42,5 @@ setupSocketHandlers(io);
 
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  logger.info(`Server running on port ${PORT}`);
 });

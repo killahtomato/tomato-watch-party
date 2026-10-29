@@ -103,6 +103,10 @@ input:focus {
   color: var(--accent);
 }
 
+.conn-status.joining {
+  color: var(--accent-alt);
+}
+
 .name-entry form {
   display: flex;
   gap: 8px;
@@ -193,6 +197,36 @@ input:focus {
 
 .waiting-message p {
   color: var(--text-dim);
+}
+
+.hls-error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.85);
+  padding: 20px 28px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+}
+
+.hls-error p {
+  color: var(--accent);
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.hls-error button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 16px;
+}
+
+.hls-error button:hover {
+  background: var(--surface-light);
 }
 
 /* Throw Overlay */
@@ -323,6 +357,49 @@ input:focus {
 .now-playing .time {
   color: var(--text-dim);
   margin-left: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.seek-bar {
+  margin-bottom: 12px;
+}
+
+.seek-bar input[type='range'] {
+  width: 100%;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--surface);
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+.seek-bar input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+.seek-bar input[type='range']::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: none;
+}
+
+.seek-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 4px;
   font-variant-numeric: tabular-nums;
 }
 

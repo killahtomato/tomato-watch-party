@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export default function NameEntry({ onSubmit, connected }) {
+export default function NameEntry({ onSubmit, connected, joining }) {
   const [name, setName] = useState('');
 
   const handleSubmit = (e) => {
@@ -16,7 +16,8 @@ export default function NameEntry({ onSubmit, connected }) {
         <p className="subtitle">Join the audience</p>
 
         {!connected && <p className="conn-status offline">Connecting to server...</p>}
-        {connected && <p className="conn-status online">Connected</p>}
+        {connected && !joining && <p className="conn-status online">Connected</p>}
+        {joining && <p className="conn-status joining">Joining...</p>}
 
         <form onSubmit={handleSubmit}>
           <input
@@ -25,10 +26,11 @@ export default function NameEntry({ onSubmit, connected }) {
             onChange={(e) => setName(e.target.value)}
             placeholder="Your display name"
             maxLength={24}
+            disabled={joining}
             autoFocus
           />
-          <button type="submit" disabled={!name.trim() || !connected}>
-            Join
+          <button type="submit" disabled={!name.trim() || !connected || joining}>
+            {joining ? '...' : 'Join'}
           </button>
         </form>
       </div>

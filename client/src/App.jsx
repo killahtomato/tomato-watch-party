@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useSocket } from './hooks/useSocket.js';
 import NameEntry from './components/NameEntry.jsx';
 import VideoPlayer from './components/VideoPlayer.jsx';
@@ -9,16 +9,37 @@ export default function App() {
   const [userName, setUserName] = useState(null);
   const [isHost, setIsHost] = useState(false);
   const [viewerCount, setViewerCount] = useState(0);
+  const [sessionData, setSessionData] = useState(null);
+  const [joining, setJoining] = useState(false);
   const { connected, emit, on } = useSocket();
+  const nameRef = useRef(null);
+
+  useEffect(() => {
+    const unsubJoined = on('joined', (data) => {
+      setSessionData(data);
+      setViewerCount(data.viewerCount);
+      setJoining(false);
+    });
+
+    const unsubViewerCount = on('viewerCount', (count) => {
+      setViewerCount(count);
+    });
+
+    return () => {
+      unsubJoined?.();
+      unsubViewerCount?.();
+    };
+  }, [on]);
 
   const handleNameSubmit = useCallback(
     (name) => {
+      if (joining) return;
+      setJoining(true);
+      nameRef.current = name;
       setUserName(name);
       emit('join', { name });
-
-      on('viewerCount', (count) => setViewerCount(count));
     },
-    [emit, on]
+    [emit, joining]
   );
 
   const handleHostLogin = useCallback(
@@ -34,21 +55,21 @@ export default function App() {
     [emit]
   );
 
-  if (!userName) {
-    return <NameEntry onsubmit={handleNameSubmit} connected={connected} />;
+  if (!userName || joining) {
+    return <NameEntry onSubmit={handleNameSubmit} connected={connected} joining={joining} />;
   }
 
   return (
     <div className="app">
       <div className="main-area">
-        <VideoPlayer userName={userName} isHost={isHost} emit={emit} on={on} />
+        <VideoPlayer userName={userName} isHost={isHost} emit={emit} on={on} sessionData={sessionData} />
         {isHost && <HostControls emit={emit} on={on} />}
       </div>
       <div className="sidebar">
         <div className="viewer-count">
           <span className="dot"></span> {viewerCount} viewer{viewerCount !== 1 ? 's' : ''}
         </div>
-        <Chat userName={userName} emit={emit} on={on} />
+        <Chat userName={userName} emit={emit} on={on} sessionData={sessionData} />
         {!isHost && (
           <button
             className="host-login-btn"

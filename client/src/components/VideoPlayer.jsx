@@ -2,58 +2,78 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import Hls from 'hls.js';
 import ThrowButton from './ThrowButton.jsx';
 
-export default function VideoPlayer({ userName, isHost, emit, on }) {
+export default function VideoPlayer({ userName, isHost, emit, on, sessionData }) {
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
-  const syncIntervalRef = useRef(null);
-  const [playbackState, setPlaybackState] = useState({ movie: null, isPlaying: false, currentTime: 0 });
-  const [throws, setThrows] = useState([]);
-
-  const initHls = useCallback(
-    (movieName) => {
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
-
-      if (!videoRef.current) return;
-
-      const video = videoRef.current;
-      const hlsUrl = `/hls/index.m3u8`;
-
-      if (Hls.isSupported()) {
-        const hls = new Hls({
-          liveSyncDurationCount: 2,
-          lowLatencyMode: true,
-          backBufferLength: 30,
-        });
-        hls.loadSource(hlsUrl);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          const state = playbackState;
-          if (state.currentTime > 0) {
-            video.currentTime = state.currentTime;
-          }
-          if (state.isPlaying) {
-            video.play().catch(() => {});
-          }
-        });
-        hlsRef.current = hls;
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = hlsUrl;
-      }
-    },
-    [playbackState]
+  const [playbackState, setPlaybackState] = useState(
+    sessionData?.playbackState || { movie: null, isPlaying: false, currentTime: 0 }
   );
+  const [throws, setThrows] = useState([]);
+  const [hlsError, setHlsError] = useState(null);
+
+  const initHls = useCallback(() => {
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    setHlsError(null);
+
+    if (!videoRef.current) return;
+
+    const video = videoRef.current;
+    const hlsUrl = `/hls/index.m3u8`;
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        liveSyncDurationCount: 2,
+        lowLatencyMode: true,
+        backBufferLength: 30,
+      });
+      hls.loadSource(hlsUrl);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setPlaybackState((prev) => {
+          if (prev.currentTime > 0) {
+            video.currentTime = prev.currentTime;
+          }
+          if (prev.isPlaying) {
+            video.play().catch((err) => console.error('[HLS] Play failed:', err));
+          }
+          return prev;
+        });
+      });
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        console.error('[HLS] Error:', data.type, data.details, data.fatal);
+        if (data.fatal) {
+          setHlsError(`${data.details} (${data.type})`);
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              hls.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              hls.recoverMediaError();
+              break;
+            default:
+              hls.destroy();
+              break;
+          }
+        }
+      });
+      hlsRef.current = hls;
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = hlsUrl;
+    }
+  }, []);
 
   useEffect(() => {
     const handlePlaybackUpdate = (state) => {
       setPlaybackState(state);
       if (state.movie && !hlsRef.current) {
-        initHls(state.movie);
+        initHls();
       }
 
-      if (videoRef.current && hlsRef.current) {
+      if (videoRef.current && hlsRef.current && !hlsError) {
         const targetTime = state.currentTime;
         const diff = Math.abs(videoRef.current.currentTime - targetTime);
         if (diff > 3) {
@@ -68,33 +88,15 @@ export default function VideoPlayer({ userName, isHost, emit, on }) {
     };
 
     const unsubUpdate = on('playbackUpdate', handlePlaybackUpdate);
-    const unsubJoined = on('joined', (data) => {
-      if (data.playbackState) handlePlaybackUpdate(data.playbackState);
-    });
     const unsubThrow = on('throw', (data) => {
       setThrows((prev) => [...prev, { ...data, thrownAt: Date.now() }]);
     });
 
     return () => {
       unsubUpdate?.();
-      unsubJoined?.();
       unsubThrow?.();
     };
-  }, [on, initHls]);
-
-  useEffect(() => {
-    if (playbackState.isPlaying) {
-      syncIntervalRef.current = setInterval(() => {
-        if (videoRef.current && isHost) {
-          emit('host:seek', { time: videoRef.current.currentTime });
-        }
-      }, 8000);
-    } else {
-      clearInterval(syncIntervalRef.current);
-    }
-
-    return () => clearInterval(syncIntervalRef.current);
-  }, [playbackState.isPlaying, isHost, emit]);
+  }, [on, initHls, hlsError]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -131,6 +133,12 @@ export default function VideoPlayer({ userName, isHost, emit, on }) {
 
   return (
     <div className="video-player">
+      {hlsError && (
+        <div className="hls-error">
+          <p>Stream error: {hlsError}</p>
+          <button onClick={initHls}>Retry</button>
+        </div>
+      )}
       <div className="throw-overlay">
         {throws.map((t) => (
           <div
@@ -143,7 +151,7 @@ export default function VideoPlayer({ userName, isHost, emit, on }) {
           </div>
         ))}
       </div>
-      <video ref={videoRef} controls={isHost} playsInline />
+      <video ref={videoRef} playsInline muted />
       <ThrowButton onThrow={handleThrow} />
     </div>
   );

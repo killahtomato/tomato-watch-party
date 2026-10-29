@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 
-export default function Chat({ userName, emit, on }) {
-  const [messages, setMessages] = useState([]);
+export default function Chat({ userName, emit, on, sessionData }) {
+  const [messages, setMessages] = useState(sessionData?.chatHistory || []);
   const [input, setInput] = useState('');
   const scrollRef = useRef(null);
 
@@ -10,13 +10,8 @@ export default function Chat({ userName, emit, on }) {
       setMessages((prev) => [...prev.slice(-199), msg]);
     });
 
-    const unsubJoined = on('joined', (data) => {
-      if (data.chatHistory) setMessages(data.chatHistory);
-    });
-
     return () => {
       unsub?.();
-      unsubJoined?.();
     };
   }, [on]);
 
