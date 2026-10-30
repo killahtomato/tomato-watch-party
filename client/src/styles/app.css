@@ -116,6 +116,51 @@ input:focus {
   flex: 1;
 }
 
+.name-input-wrap {
+  position: relative;
+}
+
+.name-entry input.shake {
+  animation: shake 0.4s ease-in-out;
+  border-color: var(--accent);
+}
+
+.name-error {
+  color: var(--accent);
+  font-size: 12px;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.falling-chars {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.falling-char {
+  position: absolute;
+  top: 50%;
+  font-size: 16px;
+  font-family: inherit;
+  animation: fall-out 0.6s ease-in forwards;
+}
+
+@keyframes fall-out {
+  0% {
+    transform: translateY(0) translateX(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(60px) translateX(var(--drift, 0px)) rotate(20deg);
+    opacity: 0;
+  }
+}
+
 .name-entry button {
   background: var(--accent);
   color: white;
@@ -266,12 +311,12 @@ input:focus {
   pointer-events: none;
   z-index: 10;
   overflow: hidden;
+  perspective: 800px;
 }
 
 .throw-item {
   position: absolute;
   font-size: 36px;
-  animation: throw-across 1.8s ease-out forwards;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -285,46 +330,76 @@ input:focus {
   white-space: nowrap;
 }
 
-.throw-from-left {
-  left: -50px;
-  animation-name: throw-from-left;
+/* First-person (thrower's view): from bottom-center to upper screen */
+.throw-firstperson {
+  animation: throw-firstperson 1.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
-.throw-from-right {
-  right: -50px;
-  animation-name: throw-from-right;
+@keyframes throw-firstperson {
+  0% {
+    left: 50%;
+    bottom: -5%;
+    transform: translate(-50%, 0) scale(1.8);
+    opacity: 1;
+  }
+  60% { opacity: 1; }
+  85% { opacity: 1; }
+  100% {
+    left: var(--throw-x, 50%);
+    bottom: var(--throw-y, 75%);
+    transform: translate(-50%, 0) scale(0.2);
+    opacity: 0;
+  }
+}
+
+/* Side view (audience): from thrower's side to center */
+.throw-from-left {
+  animation: throw-from-left 1.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
 @keyframes throw-from-left {
   0% {
-    left: -50px;
-    transform: rotate(0deg) scale(0.5);
-    opacity: 1;
-  }
-  70% {
+    left: -5%;
+    bottom: var(--throw-start-y, 10%);
+    transform: scale(0.5);
     opacity: 1;
   }
   100% {
-    left: 110%;
-    transform: rotate(720deg) scale(0.2);
+    left: var(--throw-end-x, 45%);
+    bottom: var(--throw-end-y, 50%);
+    transform: scale(1.2);
     opacity: 0;
   }
 }
 
+.throw-from-right {
+  animation: throw-from-right 1.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
 @keyframes throw-from-right {
   0% {
-    right: -50px;
-    transform: rotate(0deg) scale(0.5);
-    opacity: 1;
-  }
-  70% {
+    right: -5%;
+    bottom: var(--throw-start-y, 10%);
+    transform: scale(0.5);
     opacity: 1;
   }
   100% {
-    right: 110%;
-    transform: rotate(-720deg) scale(0.2);
+    right: var(--throw-end-x, 45%);
+    bottom: var(--throw-end-y, 50%);
+    transform: scale(1.2);
     opacity: 0;
   }
+}
+
+/* Splatter impact */
+.throw-item.splatter {
+  animation: splatter 0.4s ease-out forwards;
+}
+
+@keyframes splatter {
+  0% { transform: scale(0.2); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 1; }
+  100% { transform: scale(2); opacity: 0; }
 }
 
 /* Throw Controls */
@@ -334,8 +409,59 @@ input:focus {
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 12px;
+  gap: 16px;
   z-index: 10;
+}
+
+.throw-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.throw-dots {
+  display: flex;
+  gap: 3px;
+  font-size: 14px;
+  height: 18px;
+}
+
+.dot.used {
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+
+.dot.available {
+  opacity: 1;
+  animation: dot-pulse 0.3s ease-out;
+}
+
+@keyframes dot-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+.cooldown-timer {
+  font-size: 10px;
+  color: var(--accent);
+  min-height: 12px;
+}
+
+.throw-btn.cooldown {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+.throw-btn.shake {
+  animation: shake 0.4s ease-in-out;
 }
 
 .throw-btn {
@@ -347,6 +473,7 @@ input:focus {
   color: white;
   border: 1px solid var(--border);
   transition: background 0.2s, transform 0.1s;
+  cursor: pointer;
 }
 
 .throw-btn:hover:not(:disabled) {

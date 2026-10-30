@@ -125,16 +125,17 @@ function getMeta(streamPath) {
   }
 }
 
-function saveMeta(streamPath, sourceStat) {
+function saveMeta(streamPath, sourceStat, complete = false) {
   writeFileSync(getMetaPath(streamPath), JSON.stringify({
     sourceSize: sourceStat.size,
     sourceMtime: sourceStat.mtimeMs,
+    complete,
   }));
 }
 
 function isCacheValid(streamPath, sourceStat) {
   const meta = getMeta(streamPath);
-  if (!meta) return false;
+  if (!meta || !meta.complete) return false;
   return meta.sourceSize === sourceStat.size && meta.sourceMtime === sourceStat.mtimeMs;
 }
 
@@ -304,11 +305,13 @@ export async function playMovie(movieName) {
   if (await isBrowserCompatible(moviePath)) {
     logger.info(`Direct copy (browser-compatible): ${movieName}`);
     copyFileSync(moviePath, streamPath);
-    saveMeta(streamPath, sourceStat);
+    saveMeta(streamPath, sourceStat, true);
     currentMovie = movieName;
     resetPlaybackKeepCache();
     return getPlaybackState();
   }
+
+  saveMeta(streamPath, sourceStat, false);
 
   logger.info(`Transcoding: ${movieName} with ${encoderConfig.encoder}`);
 
@@ -338,7 +341,7 @@ export async function playMovie(movieName) {
       if (code === 0) {
         transcodeProgress = 100;
         if (streamPath === getStreamPath(currentMovie)) {
-          saveMeta(streamPath, sourceStat);
+          saveMeta(streamPath, sourceStat, true);
         }
       }
       streamProcess = null;
@@ -409,4 +412,27 @@ function stopTranscoding() {
   }
   transcoding = false;
   transcodeProgress = 0;
+}
+
+export async function initCache() {
+  if (!existsSync(STREAM_DIR)) return;
+  const files = await readdir(STREAM_DIR);
+  for (const file of files) {
+    if (!file.endsWith('.mp4')) continue;
+    const streamPath = join(STREAM_DIR, file);
+    if (existsSync(getMetaPath(streamPath))) continue;
+
+    const streamStat = await stat(streamPath);
+    if (streamStat.size > 100 * 1024 * 1024) {
+      const sourceName = file.replace('.mp4', '');
+      const sourcePath = join(MOVIE_DIR, sourceName);
+      if (existsSync(sourcePath)) {
+        saveMeta(streamPath, await stat(sourcePath), true);
+        logger.info(`Rebuilt cache: ${sourceName}`);
+      }
+    } else {
+      unlinkSync(streamPath);
+      logger.info(`Deleted incomplete: ${file}`);
+    }
+  }
 }

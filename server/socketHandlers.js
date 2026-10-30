@@ -17,9 +17,6 @@ const chatHistory = [];
 const MAX_CHAT_HISTORY = 200;
 
 const throwCooldowns = new Map();
-const THROW_COOLDOWN_MS = 12000;
-const THROW_LIMIT = 5;
-const throwCounts = new Map();
 
 let hostSocketId = null;
 let lastSeekBroadcast = 0;
@@ -36,10 +33,21 @@ export function setupSocketHandlers(io) {
 
     socket.on('join', (data) => {
       const name = (data?.name || 'Anonymous').slice(0, 24).trim();
+      const finalName = name || 'Anonymous';
+
+      const nameLower = finalName.toLowerCase();
+      const isDuplicate = [...users.values()].some(u => u.name.toLowerCase() === nameLower);
+      if (isDuplicate) {
+        logger.info(`Duplicate name rejected: ${finalName} from ${socket.id}`);
+        return socket.emit('join:error', { error: 'Name already taken' });
+      }
+
+      const side = Math.random() > 0.5 ? 'left' : 'right';
       users.set(socket.id, {
         id: socket.id,
-        name: name || 'Anonymous',
+        name: finalName,
         joinedAt: Date.now(),
+        side,
       });
 
       const state = getPlaybackState();
@@ -50,7 +58,7 @@ export function setupSocketHandlers(io) {
         viewerCount: users.size,
       });
 
-      logger.info(`Join from ${socket.id} (${name}) — stream active: ${isStreamActive()}, playing: ${state.isPlaying}`);
+      logger.info(`Join from ${socket.id} (${finalName}) — stream active: ${isStreamActive()}, playing: ${state.isPlaying}`);
       io.emit('viewerCount', users.size);
     });
 
@@ -81,30 +89,50 @@ export function setupSocketHandlers(io) {
       const user = users.get(socket.id);
       if (!user) return;
 
+      const item = data?.item === 'popcorn' ? 'popcorn' : 'tomato';
       const now = Date.now();
       const key = socket.id;
 
-      if (!throwCounts.has(key)) {
-        throwCounts.set(key, { count: 0, resetAt: now + 60000 });
+      if (!throwCooldowns.has(key)) {
+        throwCooldowns.set(key, {
+          tomato: { count: 0, resetAt: now + 30000 },
+          popcorn: { count: 0, resetAt: now + 30000 },
+        });
       }
-      const tc = throwCounts.get(key);
-      if (now > tc.resetAt) {
-        tc.count = 0;
-        tc.resetAt = now + 60000;
+      const tc = throwCooldowns.get(key);
+      const itemState = tc[item];
+
+      if (now > itemState.resetAt) {
+        itemState.count = 0;
+        itemState.resetAt = now + 30000;
       }
-      if (tc.count >= THROW_LIMIT) return;
-      tc.count++;
 
-      if (throwCooldowns.has(key) && now - throwCooldowns.get(key) < THROW_COOLDOWN_MS) return;
-      throwCooldowns.set(key, now);
+      if (itemState.count >= 3) {
+        const remaining = itemState.resetAt - now;
+        logger.debug(`Throw cooldown: ${user.name} ${item} (${remaining}ms remaining)`);
+        socket.emit('throw:cooldown', { item, remainingMs: remaining });
+        return;
+      }
 
-      const item = data?.item || 'tomato';
-      logger.debug(`Throw from ${user.name}: ${item}`);
+      itemState.count++;
+      logger.debug(`Throw from ${user.name}: ${item} (${itemState.count}/3)`);
+
       io.emit('throw', {
         id: Date.now() + '-' + socket.id,
         name: user.name,
-        item: item === 'popcorn' ? 'popcorn' : 'tomato',
-        side: Math.random() > 0.5 ? 'left' : 'right',
+        item,
+        throwerId: socket.id,
+        throwerSide: user.side,
+      });
+
+      const getInfo = (it) => {
+        const s = throwCooldowns.get(key)[it];
+        return { remaining: Math.max(0, s.resetAt - Date.now()), count: s.count };
+      };
+
+      socket.emit('throw:ack', {
+        tomato: getInfo('tomato'),
+        popcorn: getInfo('popcorn'),
       });
     });
 

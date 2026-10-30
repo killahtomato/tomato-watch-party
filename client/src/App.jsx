@@ -12,6 +12,9 @@ export default function App() {
   const [sessionData, setSessionData] = useState(null);
   const [joining, setJoining] = useState(false);
   const [displayTime, setDisplayTime] = useState(0);
+  const [joinError, setJoinError] = useState(null);
+  const [errorKey, setErrorKey] = useState(0);
+  const pendingNameRef = useRef(null);
   const seekRef = useRef(null);
   const playRef = useRef(null);
   const pauseRef = useRef(null);
@@ -32,7 +35,9 @@ export default function App() {
     const unsubJoined = on('joined', (data) => {
       setSessionData(data);
       setViewerCount(data.viewerCount);
+      setUserName(pendingNameRef.current);
       setJoining(false);
+      setJoinError(null);
     });
 
     const unsubViewerCount = on('viewerCount', (count) => {
@@ -44,10 +49,17 @@ export default function App() {
       sessionStorage.removeItem('hostToken');
     });
 
+    const unsubJoinError = on('join:error', (data) => {
+      setJoining(false);
+      setJoinError(data?.error || 'Name already taken');
+      setErrorKey(k => k + 1);
+    });
+
     return () => {
       unsubJoined?.();
       unsubViewerCount?.();
       unsubRevoked?.();
+      unsubJoinError?.();
     };
   }, [on, emit]);
 
@@ -55,7 +67,7 @@ export default function App() {
     (name) => {
       if (joining) return;
       setJoining(true);
-      setUserName(name);
+      pendingNameRef.current = name;
       emit('join', { name });
     },
     [emit, joining]
@@ -77,7 +89,7 @@ export default function App() {
   );
 
   if (!userName || joining) {
-    return <NameEntry onSubmit={handleNameSubmit} connected={connected} joining={joining} />;
+    return <NameEntry onSubmit={handleNameSubmit} connected={connected} joining={joining} error={joinError} onErrorClear={() => setJoinError(null)} errorKey={errorKey} />;
   }
 
   return (

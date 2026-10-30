@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { setupSocketHandlers } from './socketHandlers.js';
 import { authenticateHost } from './auth.js';
-import { getMovieList, getStreamDir } from './streamManager.js';
+import { getMovieList, getStreamDir, initCache } from './streamManager.js';
 import { logger } from './logger.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -39,6 +39,7 @@ app.post('/api/host/login', (req, res) => {
   }
 });
 
+await initCache();
 setupSocketHandlers(io);
 
 const PORT = process.env.PORT || 3000;

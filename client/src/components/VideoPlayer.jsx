@@ -8,8 +8,11 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     sessionData?.playbackState || { movie: null, isPlaying: false, currentTime: 0, transcoding: false, transcodeProgress: 0 }
   );
   const [throws, setThrows] = useState([]);
+  const [isMuted, setIsMuted] = useState(false);
+  const [splattering, setSplattering] = useState({});
 
   const streamUrl = playbackState.movie ? `/stream/${encodeURIComponent(playbackState.movie)}.mp4` : null;
+  const myUserId = sessionData?.userId;
 
   const handleThrow = useCallback(
     (item) => {
@@ -133,6 +136,39 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     }
   }, [pauseRef]);
 
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = isMuted;
+    }
+  }, [isMuted]);
+
+  useEffect(() => {
+    const timers = {};
+    throws.forEach(t => {
+      if (!splattering[t.id]) {
+        timers[t.id] = setTimeout(() => {
+          setSplattering(prev => ({ ...prev, [t.id]: true }));
+        }, 1300);
+      }
+    });
+    return () => Object.values(timers).forEach(clearTimeout);
+  }, [throws]);
+
+  useEffect(() => {
+    const ids = Object.keys(splattering);
+    if (ids.length > 0) {
+      const timer = setTimeout(() => {
+        setThrows(prev => prev.filter(t => !ids.includes(t.id)));
+        setSplattering(prev => {
+          const next = { ...prev };
+          ids.forEach(id => delete next[id]);
+          return next;
+        });
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [splattering]);
+
   if (!playbackState.movie) {
     return (
       <div className="video-player empty">
@@ -163,32 +199,49 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
         </div>
       )}
       <div className="throw-overlay">
-        {throws.map((t) => (
-          <div
-            key={t.id}
-            className={`throw-item throw-${t.item} throw-from-${t.side}`}
-            style={{ top: `${30 + Math.random() * 40}%` }}
-          >
-            {t.item === 'tomato' ? '🍅' : '🍿'}
-            <span className="throw-name">{t.name}</span>
-          </div>
-        ))}
+        {throws.map((t) => {
+          const isThrower = t.throwerId === myUserId;
+          const isSplatter = splattering[t.id];
+          const animClass = isThrower
+            ? 'throw-firstperson'
+            : t.throwerSide === 'left' ? 'throw-from-left' : 'throw-from-right';
+
+          const style = isThrower
+            ? {
+                '--throw-x': `${48 + Math.random() * 4}%`,
+                '--throw-y': `${60 + Math.random() * 25}%`,
+              }
+            : {
+                '--throw-start-y': `${5 + Math.random() * 20}%`,
+                '--throw-end-x': t.throwerSide === 'left' ? `${40 + Math.random() * 15}%` : `${45 + Math.random() * 15}%`,
+                '--throw-end-y': `${30 + Math.random() * 30}%`,
+              };
+
+          return (
+            <div
+              key={t.id}
+              className={`throw-item ${animClass} ${isSplatter ? 'splatter' : ''}`}
+              style={style}
+            >
+              {isSplatter
+                ? (t.item === 'tomato' ? '🔴' : '💛')
+                : (t.item === 'tomato' ? '🍅' : '🍿')}
+              {!isSplatter && <span className="throw-name">{t.name}</span>}
+            </div>
+          );
+        })}
       </div>
       <video ref={videoRef} src={playbackState.transcoding ? undefined : streamUrl} playsInline />
       <div className="player-controls">
         <button
           className="mute-btn"
-          onClick={() => {
-            if (videoRef.current) {
-              videoRef.current.muted = !videoRef.current.muted;
-            }
-          }}
-          title="Toggle sound"
+          onClick={() => setIsMuted(m => !m)}
+          title={isMuted ? 'Unmute' : 'Mute'}
         >
-          🔊
+          {isMuted ? '🔇' : '🔊'}
         </button>
       </div>
-      <ThrowButton onThrow={handleThrow} />
+      <ThrowButton onThrow={handleThrow} on={on} />
     </div>
   );
 }
