@@ -60,7 +60,8 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
       setThrows((prev) => [...prev, { ...data, thrownAt: Date.now() }]);
     });
     const unsubReaction = on('reaction', (data) => {
-      setReactions((prev) => [...prev, data]);
+      const spaced = { ...data, startX: `${(Math.random() - 0.5) * 50}%` };
+      setReactions((prev) => [...prev, spaced]);
       setTimeout(() => {
         setReactions((prev) => prev.filter(r => r.id !== data.id));
       }, 2000);
@@ -106,15 +107,17 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     };
   }, [onTimeUpdate, streamUrl]);
 
+  const onTimeUpdateRef = useRef(onTimeUpdate);
+  onTimeUpdateRef.current = onTimeUpdate;
+
   useEffect(() => {
-    if (!streamUrl) return;
     const interval = setInterval(() => {
-      if (videoRef.current && onTimeUpdate) {
-        onTimeUpdate(videoRef.current.currentTime);
+      if (videoRef.current && onTimeUpdateRef.current) {
+        onTimeUpdateRef.current(videoRef.current.currentTime);
       }
     }, 500);
     return () => clearInterval(interval);
-  }, [streamUrl, onTimeUpdate]);
+  }, []);
 
   useEffect(() => {
     if (!isHost) return;
@@ -239,7 +242,9 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
           <div
             key={r.id}
             className="throw-item reaction-item"
-            style={{ '--drift': `${(Math.random() - 0.5) * 20}px` }}
+            style={{
+              '--start-x': r.startX,
+            }}
           >
             {r.emoji}
             <span className="throw-name">{r.name}</span>

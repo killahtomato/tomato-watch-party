@@ -405,12 +405,13 @@ input:focus {
 /* Throw Controls */
 .throw-controls {
   position: absolute;
-  bottom: 60px;
+  bottom: 0px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   gap: 16px;
   z-index: 10;
+  align-items: center;
 }
 
 .throw-group {
@@ -857,6 +858,7 @@ input:focus {
   flex-direction: row;
   align-items: center;
   gap: 4px;
+  height: 44px;
 }
 
 .reaction-btn:disabled {
@@ -866,23 +868,23 @@ input:focus {
 
 .reaction-item {
   position: absolute;
-  bottom: 0;
-  left: 50%;
+  bottom: 10px;
+  left: calc(50% + var(--start-x, 0px));
   font-size: 28px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  animation: reaction-rise 1.5s ease-out forwards;
+  animation: reaction-rise 2s ease-out forwards;
 }
 
 @keyframes reaction-rise {
   0% {
     opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(0.6);
+    transform: translateY(0) scale(1);
   }
   100% {
     opacity: 0;
-    transform: translateX(calc(-50% + var(--drift, 0px))) translateY(-120px) scale(1.4);
+    transform: translateY(-470px) scale(1.8);
   }
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export default function HostControls({ emit, on, currentTime, seekRef, playRef, pauseRef }) {
   const [movies, setMovies] = useState([]);
@@ -61,8 +61,8 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
   );
 
   const handleSeekEnd = useCallback(
-    (e) => {
-      const time = parseFloat(e.target.value);
+    (time) => {
+      setDragTime(null);
       emit('host:seek', { time });
     },
     [emit]
@@ -106,13 +106,18 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
             max={movieDuration}
             step={1}
             value={dragTime !== null ? dragTime : Math.min(currentTime, movieDuration)}
-            onMouseDown={() => setDragTime(currentTime)}
-            onTouchStart={() => setDragTime(currentTime)}
-            onMouseUp={() => setDragTime(null)}
-            onTouchEnd={() => setDragTime(null)}
-            onChange={handleSeek}
-            onMouseUp={handleSeekEnd}
-            onTouchEnd={handleSeekEnd}
+            onMouseDown={(e) => {
+              e.currentTarget.value = currentTime;
+              setDragTime(currentTime);
+            }}
+            onTouchStart={(e) => {
+              e.currentTarget.value = currentTime;
+              setDragTime(currentTime);
+            }}
+            onChange={(e) => handleSeek(e)}
+            onPointerUp={(e) => {
+              handleSeekEnd(parseFloat(e.currentTarget.value));
+            }}
           />
           <div className="seek-labels">
             <span>{formatTime(currentTime)}</span>
