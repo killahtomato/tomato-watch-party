@@ -80,6 +80,19 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
   }, [onTimeUpdate, streamUrl]);
 
   useEffect(() => {
+    if (!isHost) return;
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleEnded = () => {
+      emit('host:ended', {});
+    };
+
+    video.addEventListener('ended', handleEnded);
+    return () => video.removeEventListener('ended', handleEnded);
+  }, [isHost, emit, streamUrl]);
+
+  useEffect(() => {
     const interval = setInterval(() => {
       setThrows((prev) => prev.filter((t) => Date.now() - t.thrownAt < 2000));
     }, 500);
@@ -131,27 +144,24 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     );
   }
 
-  if (playbackState.transcoding) {
-    return (
-      <div className="video-player empty">
-        <div className="waiting-message">
-          <h2>Preparing movie...</h2>
-          <div className="transcode-progress">
-            <div className="progress-bar">
-              <div
-                className="progress-fill"
-                style={{ width: `${playbackState.transcodeProgress}%` }}
-              />
-            </div>
-            <p>{playbackState.transcodeProgress}% — Please wait</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="video-player">
+      {playbackState.transcoding && (
+        <div className="transcode-overlay">
+          <div className="waiting-message">
+            <h2>Preparing movie...</h2>
+            <div className="transcode-progress">
+              <div className="progress-bar">
+                <div
+                  className="progress-fill"
+                  style={{ width: `${playbackState.transcodeProgress}%` }}
+                />
+              </div>
+              <p>{playbackState.transcodeProgress}% — Please wait</p>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="throw-overlay">
         {throws.map((t) => (
           <div
@@ -164,7 +174,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
           </div>
         ))}
       </div>
-      <video ref={videoRef} src={streamUrl} playsInline />
+      <video ref={videoRef} src={playbackState.transcoding ? undefined : streamUrl} playsInline />
       <div className="player-controls">
         <button
           className="mute-btn"

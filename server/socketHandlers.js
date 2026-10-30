@@ -5,6 +5,7 @@ import {
   pausePlayback,
   resumePlayback,
   seekPlayback,
+  endPlayback,
   updateHostPosition,
   isStreamActive,
   getCurrentMovie,
@@ -158,6 +159,15 @@ export function setupSocketHandlers(io) {
         io.emit('playbackUpdate', getPlaybackState());
       }
       callback?.({ success: true, state: getPlaybackState() });
+    });
+
+    socket.on('host:ended', (_data, callback) => {
+      if (!isHostSocket(socket)) return callback?.({ error: 'Unauthorized' });
+      if (!isStreamActive()) return callback?.({ success: true });
+      logger.info('Movie ended');
+      const state = endPlayback();
+      io.emit('playbackUpdate', state);
+      callback?.({ success: true, state });
     });
 
     socket.on('host:authenticate', (data, callback) => {

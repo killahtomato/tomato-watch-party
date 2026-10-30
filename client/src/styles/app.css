@@ -199,17 +199,19 @@ input:focus {
   color: var(--text-dim);
 }
 
-.hls-error {
+.transcode-overlay {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
-  z-index: 20;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: rgba(0, 0, 0, 0.85);
-  padding: 20px 28px;
-  border-radius: 8px;
-  border: 1px solid var(--accent);
+  z-index: 20;
+  text-align: center;
+}
+
+.transcode-overlay .waiting-message h2 {
+  color: var(--text);
 }
 
 .transcode-progress {

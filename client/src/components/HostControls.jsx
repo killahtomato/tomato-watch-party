@@ -44,9 +44,16 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
       if (seekRef?.current) {
         seekRef.current(time);
       }
+    },
+    [seekRef]
+  );
+
+  const handleSeekEnd = useCallback(
+    (e) => {
+      const time = parseFloat(e.target.value);
       emit('host:seek', { time });
     },
-    [emit, seekRef]
+    [emit]
   );
 
   const formatTime = (seconds) => {
@@ -84,6 +91,8 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
             onMouseUp={() => setDragTime(null)}
             onTouchEnd={() => setDragTime(null)}
             onChange={handleSeek}
+            onMouseUp={handleSeekEnd}
+            onTouchEnd={handleSeekEnd}
           />
           <div className="seek-labels">
             <span>{formatTime(currentTime)}</span>
