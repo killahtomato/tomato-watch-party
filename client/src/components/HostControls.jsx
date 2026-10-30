@@ -1,14 +1,16 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export default function HostControls({ emit, on, currentTime, seekRef, playRef, pauseRef }) {
   const [movies, setMovies] = useState([]);
   const [playbackState, setPlaybackState] = useState(null);
   const [dragTime, setDragTime] = useState(null);
+  const [reactionsEnabled, setReactionsEnabled] = useState(true);
+  const [moviesPanelOpen, setMoviesPanelOpen] = useState(false);
 
   useEffect(() => {
     fetch('/api/movies')
       .then((r) => r.json())
-      .then((data) => setMovies(Array.isArray(data) ? data : []));
+      .then(setMovies);
 
     const unsub = on('playbackUpdate', setPlaybackState);
     const unsubJoined = on('joined', (data) => {
@@ -22,6 +24,7 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
   }, [on]);
 
   const handlePlayMovie = (movieName) => {
+    setMoviesPanelOpen(false);
     emit('host:playMovie', { movie: movieName }, (response) => {
       if (response?.error) alert(response.error);
     });
@@ -36,6 +39,15 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
     if (playRef?.current) playRef.current();
     emit('host:resume', {});
   };
+
+  const handleSkip = useCallback(
+    (delta) => {
+      const newTime = Math.max(0, currentTime + delta);
+      if (seekRef?.current) seekRef.current(newTime);
+      emit('host:seek', { time: newTime });
+    },
+    [currentTime, seekRef, emit]
+  );
 
   const handleSeek = useCallback(
     (e) => {
@@ -56,6 +68,14 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
     [emit]
   );
 
+  const handleReactionsToggle = useCallback(() => {
+    setReactionsEnabled(prev => {
+      const next = !prev;
+      emit('host:reactions:toggle', { enabled: next });
+      return next;
+    });
+  }, [emit]);
+
   const formatTime = (seconds) => {
     if (!isFinite(seconds) || seconds < 0) return '0:00';
     const m = Math.floor(seconds / 60);
@@ -73,8 +93,8 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
 
       {playbackState?.movie && (
         <div className="now-playing">
-          {playbackState.movie.replace(/\.[^.]+$/, '')}
-          <span className="time">{formatTime(currentTime)}</span>
+          <span className="host-movie-title">{playbackState.movie.replace(/\.[^.]+$/, '')}</span>
+          <span className="time">{formatTime(currentTime)} / {formatTime(movieDuration)}</span>
         </div>
       )}
 
@@ -101,33 +121,61 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
         </div>
       )}
 
+      {playbackState?.movie && (
+        <div className="skip-row">
+          <button className="skip-btn" onClick={() => handleSkip(-10)}>⏪ 10s</button>
+          <button className="skip-btn" onClick={() => handleSkip(10)}>⏩ 10s</button>
+        </div>
+      )}
+
       <div className="host-buttons">
         {playbackState?.movie && (
           <>
             {playbackState.isPlaying ? (
-              <button onClick={handlePause}>Pause</button>
+              <button onClick={handlePause}>⏸ Pause</button>
             ) : (
               <button onClick={handleResume}>
-                {currentTime > 0 ? 'Resume' : 'Play'}
+                {currentTime > 0 ? '▶ Resume' : '▶ Play'}
               </button>
             )}
           </>
         )}
+        <label className="reactions-toggle">
+          <span className="reactions-icon">{reactionsEnabled ? '🍿' : '🚫'}</span>
+          <input
+            type="checkbox"
+            checked={reactionsEnabled}
+            onChange={handleReactionsToggle}
+          />
+          <span className="toggle-track"><span className="toggle-thumb"></span></span>
+        </label>
       </div>
 
-      <div className="movie-list">
-        <h4>Select Movie</h4>
-        {movies.length === 0 && <p>No movies found in folder.</p>}
-        {movies.map((movie) => (
-          <button
-            key={movie.name}
-            className={`movie-item ${playbackState?.movie === movie.name ? 'active' : ''}`}
-            onClick={() => handlePlayMovie(movie.name)}
-          >
-            {movie.displayName}
-            {movie.duration && <span className="duration">{formatTime(movie.duration)}</span>}
-          </button>
-        ))}
+      <div className={`movie-panel-tab${moviesPanelOpen ? ' open' : ''}`} onClick={() => setMoviesPanelOpen(o => !o)}>
+        🎬
+      </div>
+
+      <div className={`movie-panel${moviesPanelOpen ? ' open' : ''}`}>
+        <div className="movie-panel-header">
+          <h4>Select Movie</h4>
+          <button className="movie-panel-close" onClick={() => setMoviesPanelOpen(false)}>✕</button>
+        </div>
+        <div className="movie-panel-list">
+          {movies.length === 0 && <p>No movies found in folder.</p>}
+          {movies.map((movie) => (
+            <button
+              key={movie.name}
+              className={`movie-item ${playbackState?.movie === movie.name ? 'active' : ''}`}
+              onClick={() => handlePlayMovie(movie.name)}
+            >
+              <span>
+                {movie.displayName}
+                {movie.cached && <span className="movie-cached" title="Cached"></span>}
+              </span>
+              {movie.duration && <span className="duration">{formatTime(movie.duration)}</span>}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

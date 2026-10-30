@@ -48,7 +48,11 @@ export function setupSocketHandlers(io) {
         name: finalName,
         joinedAt: Date.now(),
         side,
+        isHost: !!socket.data.isHost,
       });
+      if (socket.data.isHost) {
+        hostSocketId = socket.id;
+      }
 
       const state = getPlaybackState();
       socket.emit('joined', {
@@ -59,7 +63,20 @@ export function setupSocketHandlers(io) {
       });
 
       logger.info(`Join from ${socket.id} (${finalName}) — stream active: ${isStreamActive()}, playing: ${state.isPlaying}`);
+
+      const joinMsg = {
+        id: Date.now() + '-join-' + socket.id,
+        type: 'system',
+        text: `${finalName} joined the watch party! 🎉`,
+        timestamp: Date.now(),
+      };
+      chatHistory.push(joinMsg);
+      if (chatHistory.length > MAX_CHAT_HISTORY) chatHistory.shift();
+      io.emit('chat:system', joinMsg);
+
+      socket.data.isHost = false;
       io.emit('viewerCount', users.size);
+      io.emit('users:list', [...users.values()].map(u => ({ name: u.name, side: u.side, isHost: u.isHost })));
     });
 
     socket.on('chat:message', (data) => {
@@ -74,6 +91,7 @@ export function setupSocketHandlers(io) {
         name: user.name,
         text,
         timestamp: Date.now(),
+        isHost: !!user.isHost,
       };
 
       chatHistory.push(message);
@@ -207,6 +225,8 @@ export function setupSocketHandlers(io) {
 
         socket.data.isHost = true;
         hostSocketId = socket.id;
+        const user = users.get(socket.id);
+        if (user) user.isHost = true;
         logger.info(`Host authenticated: ${socket.id}`);
 
         if (isStreamActive()) {
@@ -214,6 +234,7 @@ export function setupSocketHandlers(io) {
         }
 
         callback?.({ success: true });
+        io.emit('users:list', [...users.values()].map(u => ({ name: u.name, side: u.side, isHost: u.isHost })));
       } else {
         logger.warn(`Host auth failed: ${socket.id}`);
         callback?.({ error: 'Invalid token' });
@@ -224,17 +245,52 @@ export function setupSocketHandlers(io) {
       const user = users.get(socket.id);
       if (user) {
         logger.info(`User disconnected: ${user.name} (${socket.id})`);
+
+        const leaveMsg = {
+          id: Date.now() + '-leave-' + socket.id,
+          type: 'system',
+          text: `${user.name} left the watch party`,
+          timestamp: Date.now(),
+        };
+        chatHistory.push(leaveMsg);
+        if (chatHistory.length > MAX_CHAT_HISTORY) chatHistory.shift();
+        io.emit('chat:system', leaveMsg);
       }
 
       if (socket.id === hostSocketId) {
         hostSocketId = null;
         logger.info(`Host disconnected — stream continues for audience`);
       }
-
       users.delete(socket.id);
       io.emit('viewerCount', users.size);
+      io.emit('users:list', [...users.values()].map(u => ({ name: u.name, side: u.side, isHost: u.isHost })));
     });
+
+    socket.on('reaction', (data) => {
+      if (!isStreamActive() || !reactionsEnabled) return;
+      const user = users.get(socket.id);
+      if (!user) return;
+
+      io.emit('reaction', {
+        id: Date.now() + '-' + socket.id,
+        name: user.name,
+        emoji: data.emoji || '👏',
+        throwerId: socket.id,
+        throwerSide: user.side,
+      });
+    });
+
+    socket.on('host:reactions:toggle', (data, callback) => {
+      if (!isHostSocket(socket)) return callback?.({ error: 'Unauthorized' });
+      reactionsEnabled = data.enabled !== false;
+      io.emit('reactions:enabled', reactionsEnabled);
+      logger.info(`Reactions ${reactionsEnabled ? 'enabled' : 'disabled'} by host`);
+      callback?.({ success: true, enabled: reactionsEnabled });
+    });
+
   });
+
+  let reactionsEnabled = true;
 
   io.on('disconnect', () => {
     clearInterval(broadcastInterval);

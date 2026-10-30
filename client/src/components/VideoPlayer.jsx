@@ -8,11 +8,21 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     sessionData?.playbackState || { movie: null, isPlaying: false, currentTime: 0, transcoding: false, transcodeProgress: 0 }
   );
   const [throws, setThrows] = useState([]);
+  const [reactions, setReactions] = useState([]);
   const [isMuted, setIsMuted] = useState(false);
   const [splattering, setSplattering] = useState({});
+  const [reactionsEnabled, setReactionsEnabled] = useState(true);
 
   const streamUrl = playbackState.movie ? `/stream/${encodeURIComponent(playbackState.movie)}.mp4` : null;
   const myUserId = sessionData?.userId;
+
+  const handleReaction = useCallback(
+    (emoji) => {
+      if (!reactionsEnabled) return;
+      emit('reaction', { emoji });
+    },
+    [emit, reactionsEnabled]
+  );
 
   const handleThrow = useCallback(
     (item) => {
@@ -49,10 +59,20 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     const unsubThrow = on('throw', (data) => {
       setThrows((prev) => [...prev, { ...data, thrownAt: Date.now() }]);
     });
-
+    const unsubReaction = on('reaction', (data) => {
+      setReactions((prev) => [...prev, data]);
+      setTimeout(() => {
+        setReactions((prev) => prev.filter(r => r.id !== data.id));
+      }, 2000);
+    });
+    const unsubReactionsEnabled = on('reactions:enabled', (enabled) => {
+      setReactionsEnabled(enabled);
+    });
     return () => {
       unsubUpdate?.();
       unsubThrow?.();
+      unsubReaction?.();
+      unsubReactionsEnabled?.();
     };
   }, [on, isHost, streamUrl]);
 
@@ -79,8 +99,22 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     };
 
     video.addEventListener('timeupdate', handleTimeUpdate);
-    return () => video.removeEventListener('timeupdate', handleTimeUpdate);
+    video.addEventListener('seeked', handleTimeUpdate);
+    return () => {
+      video.removeEventListener('timeupdate', handleTimeUpdate);
+      video.removeEventListener('seeked', handleTimeUpdate);
+    };
   }, [onTimeUpdate, streamUrl]);
+
+  useEffect(() => {
+    if (!streamUrl) return;
+    const interval = setInterval(() => {
+      if (videoRef.current && onTimeUpdate) {
+        onTimeUpdate(videoRef.current.currentTime);
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, [streamUrl, onTimeUpdate]);
 
   useEffect(() => {
     if (!isHost) return;
@@ -135,6 +169,8 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
       };
     }
   }, [pauseRef]);
+
+
 
   useEffect(() => {
     if (videoRef.current) {
@@ -199,6 +235,17 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
         </div>
       )}
       <div className="throw-overlay">
+        {reactions.map((r) => (
+          <div
+            key={r.id}
+            className="throw-item reaction-item"
+            style={{ '--drift': `${(Math.random() - 0.5) * 20}px` }}
+          >
+            {r.emoji}
+            <span className="throw-name">{r.name}</span>
+          </div>
+        ))}
+
         {throws.map((t) => {
           const isThrower = t.throwerId === myUserId;
           const isSplatter = splattering[t.id];
@@ -241,7 +288,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
           {isMuted ? '🔇' : '🔊'}
         </button>
       </div>
-      <ThrowButton onThrow={handleThrow} on={on} />
+      <ThrowButton onThrow={handleThrow} on={on} reactionsEnabled={reactionsEnabled} onReaction={handleReaction} />
     </div>
   );
 }

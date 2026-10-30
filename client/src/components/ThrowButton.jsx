@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
 
-export default function ThrowButton({ onThrow, on }) {
+const REACTION_EMOJIS = ['👏', '😂', '😱', '❤️'];
+
+export default function ThrowButton({ onThrow, on, reactionsEnabled, onReaction }) {
   const [throwState, setThrowState] = useState({
     tomato: { remaining: 0, count: 0 },
     popcorn: { remaining: 0, count: 0 },
@@ -75,7 +77,7 @@ export default function ThrowButton({ onThrow, on }) {
           disabled={isCoolingDown('tomato')}
           title="Throw a tomato!"
         >
-          🍅 Tomato
+          🍅
         </button>
         {isCoolingDown('tomato') && (
           <span className="cooldown-timer">{Math.ceil(throwState.tomato.remaining / 1000)}s</span>
@@ -89,11 +91,25 @@ export default function ThrowButton({ onThrow, on }) {
           disabled={isCoolingDown('popcorn')}
           title="Throw some popcorn!"
         >
-          🍿 Popcorn
+          🍿
         </button>
         {isCoolingDown('popcorn') && (
           <span className="cooldown-timer">{Math.ceil(throwState.popcorn.remaining / 1000)}s</span>
         )}
+      </div>
+      <div className="throw-separator"></div>
+      <div className="throw-group reactions-group">
+        {REACTION_EMOJIS.map((emoji) => (
+          <button
+            key={emoji}
+            className="throw-btn reaction-btn"
+            onClick={() => onReaction(emoji)}
+            disabled={!reactionsEnabled}
+            title={`React with ${emoji}`}
+          >
+            {emoji}
+          </button>
+        ))}
       </div>
     </div>
   );

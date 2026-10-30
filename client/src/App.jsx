@@ -14,6 +14,8 @@ export default function App() {
   const [displayTime, setDisplayTime] = useState(0);
   const [joinError, setJoinError] = useState(null);
   const [errorKey, setErrorKey] = useState(0);
+  const [viewers, setViewers] = useState([]);
+  const [viewerPanelOpen, setViewerPanelOpen] = useState(false);
   const pendingNameRef = useRef(null);
   const seekRef = useRef(null);
   const playRef = useRef(null);
@@ -55,11 +57,21 @@ export default function App() {
       setErrorKey(k => k + 1);
     });
 
+    const unsubUsersList = on('users:list', (data) => {
+      setViewers(data);
+    });
+
+    const unsubPlayback = on('playbackUpdate', (state) => {
+      setSessionData(prev => ({ ...prev, playbackState: state }));
+    });
+
     return () => {
       unsubJoined?.();
       unsubViewerCount?.();
       unsubRevoked?.();
       unsubJoinError?.();
+      unsubUsersList?.();
+      unsubPlayback?.();
     };
   }, [on, emit]);
 
@@ -109,9 +121,11 @@ export default function App() {
         {isHost && <HostControls emit={emit} on={on} currentTime={displayTime} seekRef={seekRef} playRef={playRef} pauseRef={pauseRef} />}
       </div>
       <div className="sidebar">
-        <div className="viewer-count">
-          <span className="dot"></span> {viewerCount} viewer{viewerCount !== 1 ? 's' : ''}
-        </div>
+        {sessionData?.playbackState?.movie && (
+          <div className="now-playing-banner">
+            <strong>{sessionData.playbackState.movie.replace(/\.[^.]+$/, '')}</strong>
+          </div>
+        )}
         <Chat userName={userName} emit={emit} on={on} sessionData={sessionData} />
         {!isHost && (
           <button
@@ -134,6 +148,26 @@ export default function App() {
             Host Login
           </button>
         )}
+      </div>
+
+      <div className={`viewer-panel-tab${viewerPanelOpen ? ' open' : ''}`} onClick={() => setViewerPanelOpen(o => !o)}>
+        👥
+      </div>
+
+      <div className={`viewer-panel${viewerPanelOpen ? ' open' : ''}`}>
+        <div className="viewer-panel-header">
+          <span>👥 {viewerCount} viewer{viewerCount !== 1 ? 's' : ''}</span>
+          <button className="viewer-panel-close" onClick={() => setViewerPanelOpen(false)}>✕</button>
+        </div>
+        <div className="viewer-panel-list">
+          {viewers.map((v, i) => (
+            <div key={i} className="viewer-item">
+              <span className={`viewer-dot ${v.side || 'left'}`}></span>
+              <span className="viewer-name">{v.name}</span>
+              {v.isHost && <span className="viewer-host-icon">👑</span>}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
