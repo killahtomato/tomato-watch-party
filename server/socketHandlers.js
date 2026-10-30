@@ -5,6 +5,9 @@ import {
   pausePlayback,
   resumePlayback,
   seekPlayback,
+  updateHostPosition,
+  isStreamActive,
+  getCurrentMovie,
 } from './streamManager.js';
 import { logger } from './logger.js';
 
@@ -17,15 +20,20 @@ const THROW_COOLDOWN_MS = 12000;
 const THROW_LIMIT = 5;
 const throwCounts = new Map();
 
-let lastSeekTime = 0;
+let hostSocketId = null;
 let lastSeekBroadcast = 0;
 
 export function setupSocketHandlers(io) {
+  const broadcastInterval = setInterval(() => {
+    if (isStreamActive()) {
+      io.emit('playbackUpdate', getPlaybackState());
+    }
+  }, 1000);
+
   io.on('connection', (socket) => {
     logger.info(`Client connected: ${socket.id} (transport: ${socket.conn.transport.name})`);
 
     socket.on('join', (data) => {
-      logger.info(`Join from ${socket.id}: ${JSON.stringify(data)}`);
       const name = (data?.name || 'Anonymous').slice(0, 24).trim();
       users.set(socket.id, {
         id: socket.id,
@@ -33,13 +41,15 @@ export function setupSocketHandlers(io) {
         joinedAt: Date.now(),
       });
 
+      const state = getPlaybackState();
       socket.emit('joined', {
         userId: socket.id,
-        playbackState: getPlaybackState(),
+        playbackState: state,
         chatHistory,
         viewerCount: users.size,
       });
 
+      logger.info(`Join from ${socket.id} (${name}) — stream active: ${isStreamActive()}, playing: ${state.isPlaying}`);
       io.emit('viewerCount', users.size);
     });
 
@@ -62,7 +72,7 @@ export function setupSocketHandlers(io) {
         chatHistory.shift();
       }
 
-      logger.info(`Chat from ${user.name}: ${text}`);
+      logger.debug(`Chat from ${user.name}: ${text}`);
       io.emit('chat:message', message);
     });
 
@@ -88,7 +98,7 @@ export function setupSocketHandlers(io) {
       throwCooldowns.set(key, now);
 
       const item = data?.item || 'tomato';
-      logger.info(`Throw from ${user.name}: ${item}`);
+      logger.debug(`Throw from ${user.name}: ${item}`);
       io.emit('throw', {
         id: Date.now() + '-' + socket.id,
         name: user.name,
@@ -97,14 +107,23 @@ export function setupSocketHandlers(io) {
       });
     });
 
+    socket.on('host:sync', (data) => {
+      if (!isHostSocket(socket)) return;
+      if (typeof data?.position === 'number') {
+        updateHostPosition(data.position);
+        logger.debug(`Host sync: ${data.position.toFixed(1)}s`);
+      }
+    });
+
     socket.on('host:playMovie', async (data, callback) => {
-      if (!verifyToken(socket)) {
+      if (!isHostSocket(socket)) {
         logger.warn(`Unauthorized play attempt from ${socket.id}`);
         return callback?.({ error: 'Unauthorized' });
       }
+
       try {
-        logger.info(`Host playing: ${data.movie}`);
         const state = await playMovie(data.movie);
+        logger.info(`Host playing: ${data.movie}`);
         io.emit('playbackUpdate', state);
         callback?.({ success: true, state });
       } catch (err) {
@@ -114,41 +133,48 @@ export function setupSocketHandlers(io) {
     });
 
     socket.on('host:pause', (_data, callback) => {
-      if (!verifyToken(socket)) return callback?.({ error: 'Unauthorized' });
+      if (!isHostSocket(socket)) return callback?.({ error: 'Unauthorized' });
       logger.info('Host paused');
-      pausePlayback().then((state) => {
-        io.emit('playbackUpdate', state);
-        callback?.({ success: true, state });
-      });
+      pausePlayback();
+      io.emit('playbackUpdate', getPlaybackState());
+      callback?.({ success: true, state: getPlaybackState() });
     });
 
     socket.on('host:resume', (_data, callback) => {
-      if (!verifyToken(socket)) return callback?.({ error: 'Unauthorized' });
+      if (!isHostSocket(socket)) return callback?.({ error: 'Unauthorized' });
       logger.info('Host resumed');
-      resumePlayback().then((state) => {
-        io.emit('playbackUpdate', state);
-        callback?.({ success: true, state });
-      });
+      resumePlayback();
+      io.emit('playbackUpdate', getPlaybackState());
+      callback?.({ success: true, state: getPlaybackState() });
     });
 
     socket.on('host:seek', (data, callback) => {
-      if (!verifyToken(socket)) return callback?.({ error: 'Unauthorized' });
+      if (!isHostSocket(socket)) return callback?.({ error: 'Unauthorized' });
       logger.info(`Host seek to: ${data.time}`);
-      lastSeekTime = data.time;
-      seekPlayback(data.time).then((state) => {
-        const now = Date.now();
-        if (now - lastSeekBroadcast > 1000) {
-          lastSeekBroadcast = now;
-          io.emit('playbackUpdate', state);
-        }
-        callback?.({ success: true, state });
-      });
+      seekPlayback(data.time);
+      const now = Date.now();
+      if (now - lastSeekBroadcast > 500) {
+        lastSeekBroadcast = now;
+        io.emit('playbackUpdate', getPlaybackState());
+      }
+      callback?.({ success: true, state: getPlaybackState() });
     });
 
     socket.on('host:authenticate', (data, callback) => {
       if (verifyHostToken(data.token)) {
+        if (hostSocketId && hostSocketId !== socket.id) {
+          io.to(hostSocketId).emit('host:revoked');
+          logger.info(`Revoked host from ${hostSocketId}, new host: ${socket.id}`);
+        }
+
         socket.data.isHost = true;
+        hostSocketId = socket.id;
         logger.info(`Host authenticated: ${socket.id}`);
+
+        if (isStreamActive()) {
+          logger.info(`Host reconnected — stream already active: ${getCurrentMovie()}`);
+        }
+
         callback?.({ success: true });
       } else {
         logger.warn(`Host auth failed: ${socket.id}`);
@@ -161,12 +187,22 @@ export function setupSocketHandlers(io) {
       if (user) {
         logger.info(`User disconnected: ${user.name} (${socket.id})`);
       }
+
+      if (socket.id === hostSocketId) {
+        hostSocketId = null;
+        logger.info(`Host disconnected — stream continues for audience`);
+      }
+
       users.delete(socket.id);
       io.emit('viewerCount', users.size);
     });
   });
+
+  io.on('disconnect', () => {
+    clearInterval(broadcastInterval);
+  });
 }
 
-function verifyToken(socket) {
-  return socket.data?.isHost === true;
+function isHostSocket(socket) {
+  return socket.data?.isHost === true && socket.id === hostSocketId;
 }

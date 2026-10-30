@@ -11,7 +11,7 @@ export default defineConfig({
         ws: true,
       },
       '/api': 'http://localhost:3000',
-      '/hls': 'http://localhost:3000',
+      '/stream': 'http://localhost:3000',
     },
   },
   build: {

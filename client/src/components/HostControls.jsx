@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
-export default function HostControls({ emit, on }) {
+export default function HostControls({ emit, on, currentTime, seekRef, playRef, pauseRef }) {
   const [movies, setMovies] = useState([]);
   const [playbackState, setPlaybackState] = useState(null);
+  const [dragTime, setDragTime] = useState(null);
 
   useEffect(() => {
     fetch('/api/movies')
@@ -26,15 +27,26 @@ export default function HostControls({ emit, on }) {
     });
   };
 
-  const handlePause = () => emit('host:pause', {});
-  const handleResume = () => emit('host:resume', {});
+  const handlePause = () => {
+    if (pauseRef?.current) pauseRef.current();
+    emit('host:pause', {});
+  };
+
+  const handleResume = () => {
+    if (playRef?.current) playRef.current();
+    emit('host:resume', {});
+  };
 
   const handleSeek = useCallback(
     (e) => {
       const time = parseFloat(e.target.value);
+      setDragTime(time);
+      if (seekRef?.current) {
+        seekRef.current(time);
+      }
       emit('host:seek', { time });
     },
-    [emit]
+    [emit, seekRef]
   );
 
   const formatTime = (seconds) => {
@@ -55,7 +67,7 @@ export default function HostControls({ emit, on }) {
       {playbackState?.movie && (
         <div className="now-playing">
           {playbackState.movie.replace(/\.[^.]+$/, '')}
-          <span className="time">{formatTime(playbackState.currentTime)}</span>
+          <span className="time">{formatTime(currentTime)}</span>
         </div>
       )}
 
@@ -66,11 +78,15 @@ export default function HostControls({ emit, on }) {
             min={0}
             max={movieDuration}
             step={1}
-            value={Math.min(playbackState.currentTime, movieDuration)}
+            value={dragTime !== null ? dragTime : Math.min(currentTime, movieDuration)}
+            onMouseDown={() => setDragTime(currentTime)}
+            onTouchStart={() => setDragTime(currentTime)}
+            onMouseUp={() => setDragTime(null)}
+            onTouchEnd={() => setDragTime(null)}
             onChange={handleSeek}
           />
           <div className="seek-labels">
-            <span>{formatTime(playbackState.currentTime)}</span>
+            <span>{formatTime(currentTime)}</span>
             <span>{formatTime(movieDuration)}</span>
           </div>
         </div>
@@ -83,7 +99,7 @@ export default function HostControls({ emit, on }) {
               <button onClick={handlePause}>Pause</button>
             ) : (
               <button onClick={handleResume}>
-                {playbackState.currentTime > 0 ? 'Resume' : 'Play'}
+                {currentTime > 0 ? 'Resume' : 'Play'}
               </button>
             )}
           </>

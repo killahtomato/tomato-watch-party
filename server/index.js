@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { setupSocketHandlers } from './socketHandlers.js';
 import { authenticateHost } from './auth.js';
-import { getMovieList, getHlsDir } from './streamManager.js';
+import { getMovieList, getStreamDir } from './streamManager.js';
 import { logger } from './logger.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -22,7 +22,8 @@ const io = new Server(httpServer, {
 app.use(cors());
 app.use(express.json());
 app.use(express.static(join(__dirname, '..', 'client', 'dist')));
-app.use('/hls', express.static(getHlsDir()));
+
+app.use('/stream', express.static(getStreamDir()));
 
 app.get('/api/movies', async (req, res) => {
   res.json(await getMovieList());

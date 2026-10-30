@@ -11,10 +11,24 @@ export default function App() {
   const [viewerCount, setViewerCount] = useState(0);
   const [sessionData, setSessionData] = useState(null);
   const [joining, setJoining] = useState(false);
+  const [displayTime, setDisplayTime] = useState(0);
+  const seekRef = useRef(null);
+  const playRef = useRef(null);
+  const pauseRef = useRef(null);
   const { connected, emit, on } = useSocket();
-  const nameRef = useRef(null);
 
   useEffect(() => {
+    const token = sessionStorage.getItem('hostToken');
+    if (token) {
+      emit('host:authenticate', { token }, (response) => {
+        if (response?.success) {
+          setIsHost(true);
+        } else {
+          sessionStorage.removeItem('hostToken');
+        }
+      });
+    }
+
     const unsubJoined = on('joined', (data) => {
       setSessionData(data);
       setViewerCount(data.viewerCount);
@@ -25,17 +39,22 @@ export default function App() {
       setViewerCount(count);
     });
 
+    const unsubRevoked = on('host:revoked', () => {
+      setIsHost(false);
+      sessionStorage.removeItem('hostToken');
+    });
+
     return () => {
       unsubJoined?.();
       unsubViewerCount?.();
+      unsubRevoked?.();
     };
-  }, [on]);
+  }, [on, emit]);
 
   const handleNameSubmit = useCallback(
     (name) => {
       if (joining) return;
       setJoining(true);
-      nameRef.current = name;
       setUserName(name);
       emit('join', { name });
     },
@@ -44,10 +63,12 @@ export default function App() {
 
   const handleHostLogin = useCallback(
     (token) => {
+      sessionStorage.setItem('hostToken', token);
       emit('host:authenticate', { token }, (response) => {
         if (response?.success) {
           setIsHost(true);
         } else {
+          sessionStorage.removeItem('hostToken');
           alert('Invalid host token');
         }
       });
@@ -62,8 +83,18 @@ export default function App() {
   return (
     <div className="app">
       <div className="main-area">
-        <VideoPlayer userName={userName} isHost={isHost} emit={emit} on={on} sessionData={sessionData} />
-        {isHost && <HostControls emit={emit} on={on} />}
+        <VideoPlayer
+          userName={userName}
+          isHost={isHost}
+          emit={emit}
+          on={on}
+          sessionData={sessionData}
+          onTimeUpdate={setDisplayTime}
+          seekRef={seekRef}
+          playRef={playRef}
+          pauseRef={pauseRef}
+        />
+        {isHost && <HostControls emit={emit} on={on} currentTime={displayTime} seekRef={seekRef} playRef={playRef} pauseRef={pauseRef} />}
       </div>
       <div className="sidebar">
         <div className="viewer-count">
