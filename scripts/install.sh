@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "=== Movie Stream Installer ==="
+echo "=== Tomato Watch Party Installer ==="
 
 # Check for root/sudo
 if [ "$EUID" -ne 0 ]; then
@@ -9,7 +9,7 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-INSTALL_DIR="${INSTALL_DIR:-/opt/movie-stream}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/tomato-watch-party}"
 
 # Install Node.js 20 if not present
 if ! command -v node &>/dev/null || [ "$(node -v | cut -d. -f1 | tr -d 'v')" -lt 20 ]; then
@@ -63,9 +63,9 @@ echo ""
 # Optional systemd service setup
 if [ "$1" = "--systemd" ]; then
   echo "Creating systemd service..."
-  cat > /etc/systemd/system/movie-stream.service <<SVCEOF
+  cat > /etc/systemd/system/tomato-watch-party.service <<SVCEOF
 [Unit]
-Description=Movie Stream Server
+Description=Tomato Watch Party Server
 After=network.target
 
 [Service]
@@ -82,8 +82,8 @@ WantedBy=multi-user.target
 SVCEOF
 
   systemctl daemon-reload
-  systemctl enable movie-stream
-  systemctl start movie-stream
-  echo "Systemd service 'movie-stream' created and started."
-  echo "Check status with: sudo systemctl status movie-stream"
+  systemctl enable tomato-watch-party
+  systemctl start tomato-watch-party
+  echo "Systemd service 'tomato-watch-party' created and started."
+  echo "Check status with: sudo systemctl status tomato-watch-party"
 fi
