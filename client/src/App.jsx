@@ -126,6 +126,16 @@ export default function App() {
             <strong>{sessionData.playbackState.movie.replace(/\.[^.]+$/, '')}</strong>
           </div>
         )}
+        <div className="mobile-viewer-section">
+          <span className="mobile-viewer-count">👥 {viewerCount}</span>
+          <div className="mobile-viewer-list">
+            {viewers.map((v, i) => (
+              <span key={i} className="mobile-viewer-item">
+                {v.isHost && '👑'}{v.name}
+              </span>
+            ))}
+          </div>
+        </div>
         <Chat userName={userName} emit={emit} on={on} sessionData={sessionData} />
         {!isHost && (
           <button

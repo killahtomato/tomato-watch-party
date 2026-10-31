@@ -10,8 +10,11 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
   const [throws, setThrows] = useState([]);
   const [reactions, setReactions] = useState([]);
   const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useState(1);
   const [splattering, setSplattering] = useState({});
   const [reactionsEnabled, setReactionsEnabled] = useState(true);
+  const [movieEnded, setMovieEnded] = useState(false);
+  const [videoError, setVideoError] = useState(false);
 
   const streamUrl = playbackState.movie ? `/stream/${encodeURIComponent(playbackState.movie)}.mp4` : null;
   const myUserId = sessionData?.userId;
@@ -31,10 +34,24 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     [emit]
   );
 
+
+
+  const prevMovieRef = useRef(null);
+
+  useEffect(() => {
+    if (prevMovieRef.current && !playbackState.movie && !playbackState.transcoding) {
+      setMovieEnded(true);
+    }
+    prevMovieRef.current = playbackState.movie;
+  }, [playbackState.movie, playbackState.transcoding]);
+
   useEffect(() => {
     const handlePlaybackUpdate = (state) => {
       setPlaybackState(state);
       playbackRef.current = { isPlaying: state.isPlaying, currentTime: state.currentTime };
+
+      if (state.movie && movieEnded) setMovieEnded(false);
+      if (state.isPlaying && videoError) setVideoError(false);
 
       if (isHost) return;
 
@@ -75,7 +92,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
       unsubReaction?.();
       unsubReactionsEnabled?.();
     };
-  }, [on, isHost, streamUrl]);
+  }, [on, isHost, streamUrl, movieEnded, videoError]);
 
   useEffect(() => {
     if (!isHost || !videoRef.current) return;
@@ -99,11 +116,25 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
       }
     };
 
+    const handleVideoError = () => {
+      setVideoError(true);
+      setTimeout(() => {
+        if (videoRef.current && streamUrl) {
+          videoRef.current.load();
+          if (playbackRef.current.isPlaying) {
+            videoRef.current.play().catch(() => {});
+          }
+        }
+      }, 2000);
+    };
+
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('seeked', handleTimeUpdate);
+    video.addEventListener('error', handleVideoError);
     return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('seeked', handleTimeUpdate);
+      video.removeEventListener('error', handleVideoError);
     };
   }, [onTimeUpdate, streamUrl]);
 
@@ -125,6 +156,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     if (!video) return;
 
     const handleEnded = () => {
+      setMovieEnded(true);
       emit('host:ended', {});
     };
 
@@ -173,13 +205,17 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     }
   }, [pauseRef]);
 
-
-
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.muted = isMuted;
     }
   }, [isMuted]);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.volume = volume;
+    }
+  }, [volume]);
 
   useEffect(() => {
     const timers = {};
@@ -208,12 +244,72 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     }
   }, [splattering]);
 
-  if (!playbackState.movie) {
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      switch (e.key) {
+        case ' ':
+        case 'k':
+          e.preventDefault();
+          if (playbackState.isPlaying) {
+            if (pauseRef?.current) pauseRef.current();
+            if (isHost) emit('host:pause', {});
+          } else {
+            if (playRef?.current) playRef.current();
+            if (isHost) emit('host:resume', {});
+          }
+          break;
+        case 'f':
+          e.preventDefault();
+          if (document.fullscreenElement) {
+            document.exitFullscreen();
+          } else {
+            videoRef.current?.requestFullscreen();
+          }
+          break;
+        case 'm':
+          e.preventDefault();
+          setIsMuted(m => !m);
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          const backTime = Math.max(0, (videoRef.current?.currentTime || 0) - 10);
+          if (seekRef?.current) seekRef.current(backTime);
+          if (isHost) emit('host:seek', { time: backTime });
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          const fwdTime = (videoRef.current?.currentTime || 0) + 10;
+          if (seekRef?.current) seekRef.current(fwdTime);
+          if (isHost) emit('host:seek', { time: fwdTime });
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [playbackState.isPlaying, isHost, emit, playRef, pauseRef, seekRef]);
+
+  if (!playbackState.movie && !movieEnded) {
     return (
       <div className="video-player empty">
         <div className="waiting-message">
           <h2>Waiting for the show to start...</h2>
           <p>The host will begin streaming shortly.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (movieEnded && !playbackState.movie) {
+    return (
+      <div className="video-player">
+        <div className="movie-ended-overlay">
+          <div className="movie-ended-content">
+            <span className="movie-ended-icon">🎬</span>
+            <h2>The End</h2>
+          </div>
         </div>
       </div>
     );
@@ -237,6 +333,24 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
           </div>
         </div>
       )}
+
+      {movieEnded && (
+        <div className="movie-ended-overlay">
+          <div className="movie-ended-content">
+            <span className="movie-ended-icon">🎬</span>
+            <h2>The End</h2>
+          </div>
+        </div>
+      )}
+
+      {videoError && !movieEnded && (
+        <div className="video-error-overlay">
+          <div className="video-error-content">
+            <p>Connection lost. Retrying...</p>
+          </div>
+        </div>
+      )}
+
       <div className="throw-overlay">
         {reactions.map((r) => (
           <div
@@ -304,13 +418,24 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
         }}
       />
       <div className="player-controls">
-        <button
-          className="mute-btn"
-          onClick={() => setIsMuted(m => !m)}
-          title={isMuted ? 'Unmute' : 'Mute'}
-        >
-          {isMuted ? '🔇' : '🔊'}
-        </button>
+        <div className="volume-control">
+          <button
+            className="mute-btn"
+            onClick={() => setIsMuted(m => !m)}
+            title={isMuted ? 'Unmute' : 'Mute'}
+          >
+            {isMuted ? '🔇' : volume > 0.5 ? '🔊' : volume > 0 ? '🔉' : '🔈'}
+          </button>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={volume}
+            onChange={(e) => setVolume(parseFloat(e.target.value))}
+            className="volume-slider"
+          />
+        </div>
       </div>
       <ThrowButton onThrow={handleThrow} on={on} reactionsEnabled={reactionsEnabled} onReaction={handleReaction} />
     </div>
