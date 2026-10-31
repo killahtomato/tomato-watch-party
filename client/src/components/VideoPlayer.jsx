@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import ThrowButton from './ThrowButton.jsx';
 
 const QUALITY_PRESETS = ['1080p', '720p', '480p'];
@@ -23,9 +23,11 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
   const [showBanner, setShowBanner] = useState(false);
   const [toasts, setToasts] = useState([]);
 
-  const streamUrl = playbackState.movie && !playbackState.transcoding
-    ? `/stream/${encodeURIComponent(playbackState.movie)}.${currentQuality}.mp4`
-    : null;
+  const streamUrl = useMemo(() => {
+    return playbackState.movie && !playbackState.transcoding
+      ? `/stream/${encodeURIComponent(playbackState.movie)}/${currentQuality}.mp4`
+      : null;
+  }, [playbackState.movie, playbackState.transcoding, currentQuality]);
   const myUserId = sessionData?.userId;
 
   const addToast = useCallback((message, type = 'info') => {
@@ -89,11 +91,19 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     video.addEventListener('seeked', handleTimeUpdate);
     video.addEventListener('error', handleVideoError);
     video.addEventListener('ended', handleEnded);
+
+    const pollInterval = setInterval(() => {
+      if (video && !video.paused && onTimeUpdate) {
+        onTimeUpdate(video.currentTime);
+      }
+    }, 250);
+
     return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('seeked', handleTimeUpdate);
       video.removeEventListener('error', handleVideoError);
       video.removeEventListener('ended', handleEnded);
+      clearInterval(pollInterval);
     };
   }, [onTimeUpdate, streamUrl, isHost, emit]);
 
@@ -125,18 +135,21 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     const wasPlaying = !video.paused;
 
     isQualitySwitching.current = true;
+    setVideoError(false);
 
     const onCanPlay = () => {
-      video.currentTime = savedTime > 0 ? savedTime : playbackState.currentTime;
-      if (wasPlaying || playbackState.isPlaying) {
+      video.currentTime = savedTime > 0 ? savedTime : playbackRef.current.currentTime;
+      if (wasPlaying || playbackRef.current.isPlaying) {
         tryPlay();
       }
       isQualitySwitching.current = false;
+      setVideoError(false);
       video.oncanplay = null;
     };
 
     video.oncanplay = onCanPlay;
-  }, [streamUrl, playbackState.currentTime, playbackState.isPlaying]);
+    video.src = streamUrl;
+  }, [streamUrl]);
 
   useEffect(() => {
     if (!on) return;
@@ -165,6 +178,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
 
       if (state.movie && movieEnded) setMovieEnded(false);
       if (state.isPlaying && videoError) setVideoError(false);
+      if (!state.transcoding && videoError) setVideoError(false);
 
       if (isHost) return;
       if (isQualitySwitching.current) return;
@@ -173,10 +187,10 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
         const video = videoRef.current;
         const targetTime = state.currentTime;
         const diff = Math.abs(video.currentTime - targetTime);
-        if (diff > 2 && video.readyState >= 3) {
+        if (diff > 4 && video.readyState >= 3) {
           video.currentTime = targetTime;
         }
-        if (state.isPlaying && video.paused) {
+        if (state.isPlaying && video.paused && video.readyState >= 2) {
           tryPlay();
         } else if (!state.isPlaying && !video.paused) {
           video.pause();

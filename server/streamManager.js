@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 import { logger } from './logger.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: join(__dirname, '..', 'config.json') });
+dotenv.config({ path: join(__dirname, '..', '.env') });
 
 const execAsync = promisify(exec);
 
@@ -41,6 +41,27 @@ const QUALITY_PRESETS = [
 
 let ioRef = null;
 let config = { showForceQualityToast: true, showAutoRaiseToast: true };
+let syncInterval = null;
+
+export function setIoRef(io) {
+  ioRef = io;
+}
+
+function startSyncBroadcast() {
+  if (syncInterval) return;
+  syncInterval = setInterval(() => {
+    if (ioRef && isPlaying) {
+      ioRef.emit('playbackUpdate', getPlaybackState());
+    }
+  }, 2000);
+}
+
+function stopSyncBroadcast() {
+  if (syncInterval) {
+    clearInterval(syncInterval);
+    syncInterval = null;
+  }
+}
 
 async function loadConfig() {
   try {
@@ -131,6 +152,17 @@ function getMeta(streamPath) {
   }
 }
 
+async function probeDuration(moviePath) {
+  try {
+    const { stdout } = await execAsync(
+      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${moviePath}"`
+    );
+    return parseFloat(stdout.trim());
+  } catch {
+    return 0;
+  }
+}
+
 function saveMeta(streamPath, sourceStat, complete = false) {
   writeFileSync(getMetaPath(streamPath), JSON.stringify({
     sourceSize: sourceStat.size,
@@ -145,16 +177,19 @@ function isCacheValid(streamPath, sourceStat) {
   return meta.sourceSize === sourceStat.size && meta.sourceMtime === sourceStat.mtimeMs;
 }
 
-function getStreamPath(movieName, quality) {
+export function getStreamPath(movieName, quality) {
   return join(STREAM_DIR, movieName, quality + '.mp4');
 }
 
-function getStreamDir(movieName) {
-  const dir = join(STREAM_DIR, movieName);
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
+export function getStreamDir(movieName) {
+  if (movieName) {
+    const dir = join(STREAM_DIR, movieName);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
+    return dir;
   }
-  return dir;
+  return STREAM_DIR;
 }
 
 function buildTranscodeArgs(moviePath, outputPath, quality) {
@@ -172,7 +207,7 @@ function buildTranscodeArgs(moviePath, outputPath, quality) {
     args.push('-preset', encoderConfig.preset);
   }
   if (!encoderConfig.hardware) {
-    args.push('-tune', 'film');
+    args.push('-tune', 'fastdecode');
   }
   if (encoderConfig.encoder === 'h264_vaapi') {
     args.push('-qp', '24');
@@ -192,9 +227,30 @@ function resetPlaybackState() {
   lastReportTime = 0;
   transcoding = false;
   transcodeProgress = 0;
+  stopSyncBroadcast();
+}
+
+function resetPlaybackKeepCache() {
+  isPlaying = false;
+  playbackStartTime = null;
+  playbackOffset = 0;
+  lastReportedPosition = 0;
+  lastReportTime = 0;
+  stopSyncBroadcast();
 }
 
 export function updateHostPosition(position) {
+  if (!isPlaying) {
+    lastReportedPosition = position;
+    lastReportTime = Date.now();
+    return;
+  }
+  const serverTime = playbackOffset + (Date.now() - playbackStartTime) / 1000;
+  const drift = position - serverTime;
+  if (Math.abs(drift) > 1) {
+    playbackStartTime = Date.now();
+    playbackOffset = position;
+  }
   lastReportedPosition = position;
   lastReportTime = Date.now();
 }
@@ -209,7 +265,7 @@ export function getStreamDirBase() {
 
 export async function getMovieList() {
   try {
-    const files = await readdir(Movie_DIR);
+    const files = await readdir(MOVIE_DIR);
     const movies = [];
 
     for (const file of files) {
@@ -320,6 +376,12 @@ export async function playMovie(movieName, quality) {
 
   transcoding = true;
   transcodeProgress = 0;
+  currentMovie = movieName;
+  isPlaying = false;
+  playbackStartTime = null;
+  playbackOffset = 0;
+  lastReportedPosition = 0;
+  lastReportTime = 0;
 
   try {
     const totalDuration = await probeDuration(moviePath);
@@ -363,9 +425,6 @@ export async function playMovie(movieName, quality) {
     throw new Error('Failed to start transcoding: ' + err.message);
   }
 
-  currentMovie = movieName;
-  resetPlaybackState();
-
   return getPlaybackState();
 }
 
@@ -376,6 +435,7 @@ export async function pausePlayback() {
   lastReportTime = 0;
   isPlaying = false;
   playbackStartTime = null;
+  stopSyncBroadcast();
   return getPlaybackState();
 }
 
@@ -384,6 +444,7 @@ export async function resumePlayback() {
   isPlaying = true;
   playbackStartTime = Date.now();
   lastReportTime = Date.now();
+  startSyncBroadcast();
   return getPlaybackState();
 }
 
