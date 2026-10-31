@@ -62,8 +62,8 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
 
   const handleSeekEnd = useCallback(
     (time) => {
-      setDragTime(null);
       emit('host:seek', { time });
+      setTimeout(() => setDragTime(null), 50);
     },
     [emit]
   );

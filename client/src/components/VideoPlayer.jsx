@@ -283,7 +283,26 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
           );
         })}
       </div>
-      <video ref={videoRef} src={playbackState.transcoding ? undefined : streamUrl} playsInline />
+
+      <style>{`
+        video::-webkit-media-controls { display: none !important; }
+        video::-webkit-media-controls-enclosure { display: none !important; }
+        video::media-controls { display: none !important; }
+      `}</style>
+      <video
+        ref={videoRef}
+        src={playbackState.transcoding ? undefined : streamUrl}
+        playsInline
+        controls={false}
+        disablePictureInPicture
+        onDoubleClick={() => {
+          if (document.fullscreenElement) {
+            document.exitFullscreen();
+          } else {
+            videoRef.current?.requestFullscreen();
+          }
+        }}
+      />
       <div className="player-controls">
         <button
           className="mute-btn"

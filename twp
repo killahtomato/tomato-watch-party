@@ -1,0 +1,17 @@
+#!/bin/bash
+# Launch the Movie Stream server
+
+cd "$(dirname "$0")"
+
+if [ ! -d "server/node_modules" ]; then
+  echo "Installing server dependencies..."
+  cd server && npm install && cd ..
+fi
+
+if [ ! -d "client/node_modules" ]; then
+  echo "Installing client dependencies..."
+  cd client && npm install && npm run build && cd ..
+fi
+
+echo "Starting Movie Stream server..."
+cd server && node index.js
