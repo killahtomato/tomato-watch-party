@@ -5,15 +5,16 @@ services:
       - "${PORT:-3000}:3000"
     volumes:
       - ${MOVIE_DIR:-./movies}:/app/server/movies:ro
-      - hls-data:/app/server/hls
+      - ./config.json:/app/config.json:rw
+      - stream-data:/app/server/streams
     environment:
       - HOST_PASSWORD=${HOST_PASSWORD:-changeme}
-      - JWT_SECRET=${JWT_SECRET:-change-this-to-a-random-secret-key}
+      - JWT_SECRET=${JWT_SECRET}-change-this-to-a-random-secret-key
       - PORT=3000
       - MOVIE_DIR=/app/server/movies
-      - HLS_DIR=/app/server/hls
+      - STREAM_DIR=/app/server/streams
       - NODE_ENV=production
     restart: unless-stopped
 
 volumes:
-  hls-data:
+  stream-data:

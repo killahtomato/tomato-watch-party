@@ -1,11 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
+const QUALITY_PRESETS = ['1080p', '720p', '480p'];
+
 export default function HostControls({ emit, on, currentTime, seekRef, playRef, pauseRef }) {
   const [movies, setMovies] = useState([]);
   const [playbackState, setPlaybackState] = useState(null);
   const [dragTime, setDragTime] = useState(null);
   const [reactionsEnabled, setReactionsEnabled] = useState(true);
   const [moviesPanelOpen, setMoviesPanelOpen] = useState(false);
+  const [forcedQuality, setForcedQuality] = useState(null);
+  const popupRef = useRef(null);
 
   useEffect(() => {
     fetch('/api/movies')
@@ -25,7 +29,7 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
 
   const handlePlayMovie = (movieName) => {
     setMoviesPanelOpen(false);
-    emit('host:playMovie', { movie: movieName }, (response) => {
+    emit('host:playMovie', { movie: movieName, quality: '1080p' }, (response) => {
       if (response?.error) alert(response.error);
     });
   };
@@ -53,17 +57,16 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
     (e) => {
       const time = parseFloat(e.target.value);
       setDragTime(time);
-      if (seekRef?.current) {
-        seekRef.current(time);
-      }
+      if (seekRef?.current) seekRef.current(time);
     },
     [seekRef]
   );
 
   const handleSeekEnd = useCallback(
-    (time) => {
+    (e) => {
+      const time = parseFloat(e.target.value);
+      setDragTime(null);
       emit('host:seek', { time });
-      setTimeout(() => setDragTime(null), 50);
     },
     [emit]
   );
@@ -76,12 +79,13 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
     });
   }, [emit]);
 
-  const formatTime = (seconds) => {
-    if (!isFinite(seconds) || seconds < 0) return '0:00';
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
+  const handleForceQualityAll = useCallback(
+    (quality) => {
+      emit('host:forceQuality', { quality });
+      setForcedQuality(quality);
+    },
+    [emit]
+  );
 
   const movieDuration = playbackState?.movie
     ? movies.find((m) => m.name === playbackState.movie)?.duration || 0
@@ -106,18 +110,11 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
             max={movieDuration}
             step={1}
             value={dragTime !== null ? dragTime : Math.min(currentTime, movieDuration)}
-            onMouseDown={(e) => {
-              e.currentTarget.value = currentTime;
-              setDragTime(currentTime);
-            }}
-            onTouchStart={(e) => {
-              e.currentTarget.value = currentTime;
-              setDragTime(currentTime);
-            }}
-            onChange={(e) => handleSeek(e)}
-            onPointerUp={(e) => {
-              handleSeekEnd(parseFloat(e.currentTarget.value));
-            }}
+            onMouseDown={() => setDragTime(currentTime)}
+            onTouchStart={() => setDragTime(currentTime)}
+            onChange={handleSeek}
+            onMouseUp={handleSeekEnd}
+            onTouchEnd={handleSeekEnd}
           />
           <div className="seek-labels">
             <span>{formatTime(currentTime)}</span>
@@ -147,13 +144,30 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
         )}
         <label className="reactions-toggle">
           <span className="reactions-icon">{reactionsEnabled ? '🍿' : '🚫'}</span>
-          <input
-            type="checkbox"
-            checked={reactionsEnabled}
-            onChange={handleReactionsToggle}
-          />
+          <input type="checkbox" checked={reactionsEnabled} onChange={handleReactionsToggle} />
           <span className="toggle-track"><span className="toggle-thumb"></span></span>
         </label>
+      </div>
+
+      <div className="force-quality-all">
+        <span className="fq-label">Force quality:</span>
+        <select
+          className="fq-select"
+          value={forcedQuality || 'none'}
+          onChange={(e) => {
+            if (e.target.value === 'none') {
+              setForcedQuality(null);
+              emit('host:forceQuality', { quality: playbackState?.quality || '1080p' });
+            } else {
+              handleForceQualityAll(e.target.value);
+            }
+          }}
+        >
+          <option value="none">None (auto)</option>
+          {QUALITY_PRESETS.map(q => (
+            <option key={q} value={q}>{q}</option>
+          ))}
+        </select>
       </div>
 
       <div className={`movie-panel-tab${moviesPanelOpen ? ' open' : ''}`} onClick={() => setMoviesPanelOpen(o => !o)}>
@@ -184,4 +198,11 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
       </div>
     </div>
   );
+}
+
+function formatTime(seconds) {
+  if (!isFinite(seconds) || seconds < 0) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
 }

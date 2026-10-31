@@ -6,27 +6,33 @@ import {
   resumePlayback,
   seekPlayback,
   endPlayback,
+  changeQuality,
   updateHostPosition,
   isStreamActive,
   getCurrentMovie,
 } from './streamManager.js';
 import { logger } from './logger.js';
+import { setIoRef } from './streamManager.js';
 
 const users = new Map();
 const chatHistory = [];
 const MAX_CHAT_HISTORY = 200;
 
 const throwCooldowns = new Map();
+const viewerHealth = new Map();
 
 let hostSocketId = null;
 let lastSeekBroadcast = 0;
+let reactionsEnabled = true;
 
 export function setupSocketHandlers(io) {
+  setIoRef(io);
+
   const broadcastInterval = setInterval(() => {
     if (isStreamActive()) {
       io.emit('playbackUpdate', getPlaybackState());
     }
-  }, 1000);
+  }, 3000);
 
   io.on('connection', (socket) => {
     logger.info(`Client connected: ${socket.id} (transport: ${socket.conn.transport.name})`);
@@ -76,7 +82,7 @@ export function setupSocketHandlers(io) {
 
       socket.data.isHost = false;
       io.emit('viewerCount', users.size);
-      io.emit('users:list', [...users.values()].map(u => ({ name: u.name, side: u.side, isHost: u.isHost })));
+      broadcastUsersList(io);
     });
 
     socket.on('chat:message', (data) => {
@@ -154,6 +160,32 @@ export function setupSocketHandlers(io) {
       });
     });
 
+    socket.on('reaction', (data) => {
+      if (!isStreamActive() || !reactionsEnabled) return;
+      const user = users.get(socket.id);
+      if (!user) return;
+
+      io.emit('reaction', {
+        id: Date.now() + '-' + socket.id,
+        name: user.name,
+        emoji: data.emoji || '👏',
+        throwerId: socket.id,
+        throwerSide: user.side,
+      });
+    });
+
+    socket.on('ping:measure', (data, callback) => {
+      callback({ timestamp: data?.timestamp, serverTime: Date.now() });
+    });
+
+    socket.on('viewer:health', (data) => {
+      viewerHealth.set(socket.id, {
+        bufferHealth: data?.bufferHealth || 0,
+        drift: data?.drift || 0,
+        updatedAt: Date.now(),
+      });
+    });
+
     socket.on('host:sync', (data) => {
       if (!isHostSocket(socket)) return;
       if (typeof data?.position === 'number') {
@@ -169,8 +201,8 @@ export function setupSocketHandlers(io) {
       }
 
       try {
-        const state = await playMovie(data.movie);
-        logger.info(`Host playing: ${data.movie}`);
+        const state = await playMovie(data.movie, data.quality);
+        logger.info(`Host playing: ${data.movie} (${state.quality})`);
         io.emit('playbackUpdate', state);
         callback?.({ success: true, state });
       } catch (err) {
@@ -216,6 +248,23 @@ export function setupSocketHandlers(io) {
       callback?.({ success: true, state });
     });
 
+    socket.on('host:forceQuality', (data, callback) => {
+      if (!isHostSocket(socket)) return callback?.({ error: 'Unauthorized' });
+      const quality = data.quality || '1080p';
+
+      if (data.targetUserId) {
+        logger.info(`Quality forced: ${quality} for ${data.targetUserId}`);
+        io.to(data.targetUserId).emit('forceQuality', { quality, forcedBy: 'host' });
+        io.emit('quality:forced', { targetUserId: data.targetUserId, quality, isAll: false });
+      } else {
+        logger.info(`Quality forced: ${quality} for all viewers`);
+        io.emit('forceQuality', { quality, forcedBy: 'host' });
+        io.emit('quality:forced', { quality, isAll: true });
+      }
+
+      callback?.({ success: true });
+    });
+
     socket.on('host:authenticate', (data, callback) => {
       if (verifyHostToken(data.token)) {
         if (hostSocketId && hostSocketId !== socket.id) {
@@ -234,7 +283,7 @@ export function setupSocketHandlers(io) {
         }
 
         callback?.({ success: true });
-        io.emit('users:list', [...users.values()].map(u => ({ name: u.name, side: u.side, isHost: u.isHost })));
+        broadcastUsersList(io);
       } else {
         logger.warn(`Host auth failed: ${socket.id}`);
         callback?.({ error: 'Invalid token' });
@@ -262,22 +311,9 @@ export function setupSocketHandlers(io) {
         logger.info(`Host disconnected — stream continues for audience`);
       }
       users.delete(socket.id);
+      viewerHealth.delete(socket.id);
       io.emit('viewerCount', users.size);
-      io.emit('users:list', [...users.values()].map(u => ({ name: u.name, side: u.side, isHost: u.isHost })));
-    });
-
-    socket.on('reaction', (data) => {
-      if (!isStreamActive() || !reactionsEnabled) return;
-      const user = users.get(socket.id);
-      if (!user) return;
-
-      io.emit('reaction', {
-        id: Date.now() + '-' + socket.id,
-        name: user.name,
-        emoji: data.emoji || '👏',
-        throwerId: socket.id,
-        throwerSide: user.side,
-      });
+      broadcastUsersList(io);
     });
 
     socket.on('host:reactions:toggle', (data, callback) => {
@@ -287,10 +323,7 @@ export function setupSocketHandlers(io) {
       logger.info(`Reactions ${reactionsEnabled ? 'enabled' : 'disabled'} by host`);
       callback?.({ success: true, enabled: reactionsEnabled });
     });
-
   });
-
-  let reactionsEnabled = true;
 
   io.on('disconnect', () => {
     clearInterval(broadcastInterval);
@@ -299,4 +332,18 @@ export function setupSocketHandlers(io) {
 
 function isHostSocket(socket) {
   return socket.data?.isHost === true && socket.id === hostSocketId;
+}
+
+function broadcastUsersList(io) {
+  io.emit('users:list', [...users.values()].map(u => {
+    const health = viewerHealth.get(u.id);
+    return {
+      id: u.id,
+      name: u.name,
+      side: u.side,
+      isHost: u.isHost,
+      bufferHealth: health?.bufferHealth || null,
+      drift: health?.drift || null,
+    };
+  }));
 }

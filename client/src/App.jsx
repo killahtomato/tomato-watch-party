@@ -14,13 +14,13 @@ export default function App() {
   const [displayTime, setDisplayTime] = useState(0);
   const [joinError, setJoinError] = useState(null);
   const [errorKey, setErrorKey] = useState(0);
-  const [viewers, setViewers] = useState([]);
   const [viewerPanelOpen, setViewerPanelOpen] = useState(false);
+  const [viewers, setViewers] = useState([]);
+  const { connected, emit, on } = useSocket();
   const pendingNameRef = useRef(null);
   const seekRef = useRef(null);
   const playRef = useRef(null);
   const pauseRef = useRef(null);
-  const { connected, emit, on } = useSocket();
 
   useEffect(() => {
     const token = sessionStorage.getItem('hostToken');
@@ -100,8 +100,43 @@ export default function App() {
     [emit]
   );
 
+  const handleForceQuality = useCallback(
+    (userId, quality) => {
+      if (userId) {
+        emit('host:forceQuality', { targetUserId: userId, quality });
+      } else {
+        emit('host:forceQuality', { quality });
+      }
+    },
+    [emit]
+  );
+
+  const getSignalBars = (pingMs) => {
+    if (pingMs <= 0) return '░░░░';
+    if (pingMs < 50) return '▓▓▓▓';
+    if (pingMs < 100) return '▓▓▓░';
+    if (pingMs < 200) return '▓▓░░';
+    return '▓░░░';
+  };
+
+  const getHealthStatus = (bufferHealth) => {
+    if (!bufferHealth && bufferHealth !== 0) return 'unknown';
+    if (bufferHealth > 10) return 'good';
+    if (bufferHealth > 5) return 'low';
+    return 'critical';
+  };
+
   if (!userName || joining) {
-    return <NameEntry onSubmit={handleNameSubmit} connected={connected} joining={joining} error={joinError} onErrorClear={() => setJoinError(null)} errorKey={errorKey} />;
+    return (
+      <NameEntry
+        onSubmit={handleNameSubmit}
+        connected={connected}
+        joining={joining}
+        error={joinError}
+        onErrorClear={() => setJoinError(null)}
+        errorKey={errorKey}
+      />
+    );
   }
 
   return (
@@ -118,24 +153,24 @@ export default function App() {
           playRef={playRef}
           pauseRef={pauseRef}
         />
-        {isHost && <HostControls emit={emit} on={on} currentTime={displayTime} seekRef={seekRef} playRef={playRef} pauseRef={pauseRef} />}
+        {isHost && (
+          <HostControls
+            emit={emit}
+            on={on}
+            currentTime={displayTime}
+            seekRef={seekRef}
+            playRef={playRef}
+            pauseRef={pauseRef}
+          />
+        )}
       </div>
+
       <div className="sidebar">
         {sessionData?.playbackState?.movie && (
           <div className="now-playing-banner">
             <strong>{sessionData.playbackState.movie.replace(/\.[^.]+$/, '')}</strong>
           </div>
         )}
-        <div className="mobile-viewer-section">
-          <span className="mobile-viewer-count">👥 {viewerCount}</span>
-          <div className="mobile-viewer-list">
-            {viewers.map((v, i) => (
-              <span key={i} className="mobile-viewer-item">
-                {v.isHost && '👑'}{v.name}
-              </span>
-            ))}
-          </div>
-        </div>
         <Chat userName={userName} emit={emit} on={on} sessionData={sessionData} />
         {!isHost && (
           <button
@@ -170,13 +205,49 @@ export default function App() {
           <button className="viewer-panel-close" onClick={() => setViewerPanelOpen(false)}>✕</button>
         </div>
         <div className="viewer-panel-list">
-          {viewers.map((v, i) => (
-            <div key={i} className="viewer-item">
-              <span className={`viewer-dot ${v.side || 'left'}`}></span>
-              <span className="viewer-name">{v.name}</span>
-              {v.isHost && <span className="viewer-host-icon">👑</span>}
-            </div>
-          ))}
+          {viewers.map((v) => {
+            const status = getHealthStatus(v.bufferHealth);
+            const signal = getSignalBars(v.pingMs);
+            return (
+              <div key={v.id} className="viewer-item">
+                <span className={`viewer-dot ${status}`}></span>
+                <span className="viewer-signal">{signal}</span>
+                {v.pingMs > 0 && <span className="viewer-ping">{v.pingMs}ms</span>}
+                <span className="viewer-name">{v.name}</span>
+                {v.isHost && <span className="viewer-host-icon">👑</span>}
+                {isHost && (
+                  <div className="viewer-force-quality">
+                    <button
+                      className="force-quality-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const popup = e.target.nextElementSibling;
+                        popup.classList.toggle('open');
+                      }}
+                    >
+                      ⚙️
+                    </button>
+                    <div className="force-quality-popup">
+                      {['1080p', '720p', '480p'].map(q => (
+                        <button
+                          key={q}
+                          className="fq-option"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleForceQuality(v.id, q);
+                            v.forceQuality = q;
+                            e.target.closest('.force-quality-popup').classList.remove('open');
+                          }}
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
