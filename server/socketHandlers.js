@@ -182,6 +182,7 @@ export function setupSocketHandlers(io) {
       viewerHealth.set(socket.id, {
         bufferHealth: data?.bufferHealth || 0,
         drift: data?.drift || 0,
+        pingMs: data?.pingMs || 0,
         updatedAt: Date.now(),
       });
     });
@@ -254,15 +255,19 @@ export function setupSocketHandlers(io) {
 
       if (data.targetUserId) {
         logger.info(`Quality forced: ${quality} for ${data.targetUserId}`);
-        io.to(data.targetUserId).emit('forceQuality', { quality, forcedBy: 'host' });
-        io.emit('quality:forced', { targetUserId: data.targetUserId, quality, isAll: false });
+        io.to(data.targetUserId).emit('forceQuality', { quality });
       } else {
         logger.info(`Quality forced: ${quality} for all viewers`);
-        io.emit('forceQuality', { quality, forcedBy: 'host' });
-        io.emit('quality:forced', { quality, isAll: true });
+        io.emit('forceQuality', { quality });
       }
 
       callback?.({ success: true });
+    });
+
+    socket.on('host:qualityChange', (data) => {
+      if (!isHostSocket(socket)) return;
+      logger.info(`Host quality changed: ${data.quality}`);
+      socket.broadcast.emit('qualityChange', { quality: data.quality });
     });
 
     socket.on('host:authenticate', (data, callback) => {

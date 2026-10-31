@@ -6,6 +6,7 @@ const QUALITY_PRESETS = ['1080p', '720p', '480p'];
 export default function VideoPlayer({ userName, isHost, emit, on, sessionData, onTimeUpdate, seekRef, playRef, pauseRef }) {
   const videoRef = useRef(null);
   const playbackRef = useRef({ isPlaying: false, currentTime: 0 });
+  const isQualitySwitching = useRef(false);
   const [playbackState, setPlaybackState] = useState(
     sessionData?.playbackState || { movie: null, isPlaying: false, currentTime: 0, transcoding: false, transcodeProgress: 0 }
   );
@@ -18,12 +19,22 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
   const [videoError, setVideoError] = useState(false);
   const [currentQuality, setCurrentQuality] = useState('1080p');
   const [bufferHealth, setBufferHealth] = useState(0);
+  const [pingMs, setPingMs] = useState(0);
   const [showBanner, setShowBanner] = useState(false);
+  const [toasts, setToasts] = useState([]);
 
   const streamUrl = playbackState.movie && !playbackState.transcoding
-    ? `/stream/${encodeURIComponent(playbackState.movie)}.1080p.mp4`
+    ? `/stream/${encodeURIComponent(playbackState.movie)}.${currentQuality}.mp4`
     : null;
   const myUserId = sessionData?.userId;
+
+  const addToast = useCallback((message, type = 'info') => {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev.slice(-2), { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 3000);
+  }, []);
 
   const handleReaction = useCallback(
     (emoji) => {
@@ -36,6 +47,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     if (!isHost || !videoRef.current) return;
 
     const syncInterval = setInterval(() => {
+      if (isQualitySwitching.current) return;
       if (videoRef.current && playbackRef.current.isPlaying) {
         emit('host:sync', { position: videoRef.current.currentTime });
       }
@@ -89,7 +101,10 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     if (!videoRef.current) return;
     const video = videoRef.current;
     const attempt = () => {
-      video.play().catch(() => {});
+      video.play().catch(() => {
+        video.muted = true;
+        video.play().catch(() => {});
+      });
     };
     if (video.readyState >= 2) {
       attempt();
@@ -106,15 +121,42 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     if (!streamUrl || !videoRef.current) return;
 
     const video = videoRef.current;
+    const savedTime = video.currentTime;
+    const wasPlaying = !video.paused;
 
-    if (playbackState.currentTime > 0) {
-      video.currentTime = playbackState.currentTime;
-    }
+    isQualitySwitching.current = true;
 
-    if (playbackState.isPlaying) {
-      tryPlay();
-    }
-  }, [streamUrl]);
+    const onCanPlay = () => {
+      video.currentTime = savedTime > 0 ? savedTime : playbackState.currentTime;
+      if (wasPlaying || playbackState.isPlaying) {
+        tryPlay();
+      }
+      isQualitySwitching.current = false;
+      video.oncanplay = null;
+    };
+
+    video.oncanplay = onCanPlay;
+  }, [streamUrl, playbackState.currentTime, playbackState.isPlaying]);
+
+  useEffect(() => {
+    if (!on) return;
+
+    const unsubForce = on('forceQuality', (data) => {
+      setCurrentQuality(data.quality);
+      addToast && addToast(`Quality forced to ${data.quality}`, 'forced');
+    });
+
+    const unsubQualityChange = on('qualityChange', (data) => {
+      if (!isHost) {
+        setCurrentQuality(data.quality);
+      }
+    });
+
+    return () => {
+      unsubForce?.();
+      unsubQualityChange?.();
+    };
+  }, [on, isHost, addToast]);
 
   useEffect(() => {
     const handlePlaybackUpdate = (state) => {
@@ -125,16 +167,15 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
       if (state.isPlaying && videoError) setVideoError(false);
 
       if (isHost) return;
+      if (isQualitySwitching.current) return;
 
       if (videoRef.current && streamUrl && !state.transcoding) {
         const video = videoRef.current;
         const targetTime = state.currentTime;
         const diff = Math.abs(video.currentTime - targetTime);
-
         if (diff > 2 && video.readyState >= 3) {
           video.currentTime = targetTime;
         }
-
         if (state.isPlaying && video.paused) {
           tryPlay();
         } else if (!state.isPlaying && !video.paused) {
@@ -164,11 +205,59 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
   }, [on, isHost, streamUrl, movieEnded, videoError]);
 
   useEffect(() => {
+    const interval = setInterval(() => {
+      if (!videoRef.current || !playbackState.isPlaying) {
+        setBufferHealth(0);
+        return;
+      }
+
+      const buffered = videoRef.current.buffered;
+      let bufferEnd = 0;
+      for (let i = 0; i < buffered.length; i++) {
+        if (buffered.start(i) <= videoRef.current.currentTime) {
+          bufferEnd = Math.max(bufferEnd, buffered.end(i));
+        }
+      }
+      const health = bufferEnd - videoRef.current.currentTime;
+      setBufferHealth(health);
+
+      if (!isHost && playbackState.movie) {
+        emit('viewer:health', { bufferHealth: health, drift: Math.abs(playbackState.currentTime - videoRef.current.currentTime), pingMs });
+      }
+
+      if (health > 0 && health < 5 && Math.abs(playbackState.currentTime - videoRef.current.currentTime) > 5) {
+        if (!showBanner) {
+          setShowBanner(true);
+        }
+      }
+
+      if (health > 15 && showBanner) {
+        if (currentQuality !== '1080p' && !isHost) {
+          handleRaiseQuality();
+        }
+        setShowBanner(false);
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [playbackState.isPlaying, playbackState.currentTime, isHost, showBanner, currentQuality, pingMs]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const start = Date.now();
+      emit('ping:measure', { timestamp: start }, (response) => {
+        if (response?.timestamp === start) {
+          setPingMs(Date.now() - start);
+        }
+      });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [emit]);
+
+  useEffect(() => {
     if (seekRef) {
       seekRef.current = (time) => {
-        if (videoRef.current) {
-          videoRef.current.currentTime = time;
-        }
+        if (videoRef.current) videoRef.current.currentTime = time;
       };
     }
     if (playRef) {
@@ -179,17 +268,12 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
         }
       };
     }
-  }, [seekRef, playRef]);
-
-  useEffect(() => {
     if (pauseRef) {
       pauseRef.current = () => {
-        if (videoRef.current) {
-          videoRef.current.pause();
-        }
+        if (videoRef.current) videoRef.current.pause();
       };
     }
-  }, [pauseRef]);
+  }, [seekRef, playRef, pauseRef]);
 
   useEffect(() => {
     if (videoRef.current) {
@@ -205,10 +289,10 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
 
   useEffect(() => {
     const timers = {};
-    throws.forEach((t) => {
+    throws.forEach(t => {
       if (!splattering[t.id]) {
         timers[t.id] = setTimeout(() => {
-          setSplattering((prev) => ({ ...prev, [t.id]: true }));
+          setSplattering(prev => ({ ...prev, [t.id]: true }));
         }, 1300);
       }
     });
@@ -219,16 +303,46 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     const ids = Object.keys(splattering);
     if (ids.length > 0) {
       const timer = setTimeout(() => {
-        setThrows((prev) => prev.filter((t) => !ids.includes(t.id)));
-        setSplattering((prev) => {
+        setThrows(prev => prev.filter(t => !ids.includes(t.id)));
+        setSplattering(prev => {
           const next = { ...prev };
-          ids.forEach((id) => delete next[id]);
+          ids.forEach(id => delete next[id]);
           return next;
         });
       }, 500);
       return () => clearTimeout(timer);
     }
   }, [splattering]);
+
+  const handleLowerQuality = useCallback(() => {
+    const idx = QUALITY_PRESETS.indexOf(currentQuality);
+    if (idx < QUALITY_PRESETS.length - 1) {
+      const newQuality = QUALITY_PRESETS[idx + 1];
+      setCurrentQuality(newQuality);
+      addToast(`Auto-switched to ${newQuality}`, 'info');
+    }
+  }, [currentQuality, addToast]);
+
+  const handleRaiseQuality = useCallback(() => {
+    const idx = QUALITY_PRESETS.indexOf(currentQuality);
+    if (idx > 0) {
+      const newQuality = QUALITY_PRESETS[idx - 1];
+      setCurrentQuality(newQuality);
+      addToast(`Quality restored to ${newQuality}`, 'success');
+    }
+  }, [currentQuality, addToast]);
+
+  const handleManualQualityChange = useCallback((quality) => {
+    if (quality !== currentQuality) {
+      setCurrentQuality(quality);
+      setShowBanner(false);
+      if (isHost) {
+        emit('host:qualityChange', { quality });
+      } else {
+        addToast(`Switched to ${quality}`, 'info');
+      }
+    }
+  }, [currentQuality, isHost, emit, addToast]);
 
   if (!playbackState.movie) {
     return (
@@ -291,6 +405,15 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
           </div>
         </div>
       )}
+
+      <div className="toast-stack">
+        {toasts.map((t, i) => (
+          <div key={t.id} className={`toast toast-${t.type}`} style={{ top: `${i * 40}px` }}>
+            <span>{t.message}</span>
+            <button className="toast-close" onClick={() => setToasts(prev => prev.filter(toast => toast.id !== t.id))}>✕</button>
+          </div>
+        ))}
+      </div>
 
       <div className="throw-overlay">
         {throws.map((t) => {

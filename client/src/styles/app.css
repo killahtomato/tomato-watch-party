@@ -945,7 +945,69 @@ video::media-controls { display: none !important; }
   background: rgba(50, 50, 50, 0.9);
 }
 
-/* Responsive */
+/* Toast Stack */
+.toast-stack {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  min-width: 200px;
+  pointer-events: all;
+  animation: toast-in 0.3s ease-out, toast-out 0.3s ease-in 2.7s forwards;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.toast-info {
+  background: #4488ff;
+  color: white;
+}
+
+.toast-success {
+  background: #44cc88;
+  color: white;
+}
+
+.toast-forced {
+  background: #ffaa33;
+  color: #2a5a1a;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.7;
+  padding: 2px;
+}
+
+.toast-close:hover { opacity: 1; }
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
   .app {

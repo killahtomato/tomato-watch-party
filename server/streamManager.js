@@ -1,6 +1,6 @@
 import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
-import { mkdirSync, existsSync, unlinkSync, copyFileSync, readFileSync, writeFileSync, rmSync, watch } from 'fs';
+import { mkdirSync, existsSync, unlinkSync, copyFileSync, readFileSync, writeFileSync, rmSync } from 'fs';
 import { readdir, stat } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -8,9 +8,7 @@ import dotenv from 'dotenv';
 import { logger } from './logger.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: join(__dirname, '..', '.env') });
-
-const CONFIG_PATH = join(__dirname, '..', 'config.json');
+dotenv.config({ path: join(__dirname, '..', 'config.json') });
 
 const execAsync = promisify(exec);
 
@@ -18,20 +16,12 @@ const MOVIE_DIR = process.env.MOVIE_DIR || './movies';
 const STREAM_DIR = process.env.STREAM_DIR || './streams';
 
 const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv', '.wmv', '.m4v'];
-
-let ioRef = null;
-
-export function setIoRef(io) {
-  ioRef = io;
-}
-const QUALITIES = ['1080p', '720p', '480p'];
 const DEFAULT_QUALITY = '1080p';
 
 let encoderConfig = { encoder: 'libx264', preset: 'ultrafast', hardware: false, vaapiDevice: null };
 let encoderDetected = false;
 
 let currentMovie = null;
-let currentQuality = DEFAULT_QUALITY;
 let isPlaying = false;
 let playbackStartTime = null;
 let playbackOffset = 0;
@@ -42,78 +32,22 @@ let lastReportTime = 0;
 
 let transcoding = false;
 let transcodeProgress = 0;
-let movieDuration = 0;
 
-let config = loadConfig();
+const QUALITY_PRESETS = [
+  { quality: '1080p', width: 1920, height: 1080, bitrate: '8M' },
+  { quality: '720p', width: 1280, height: 720, bitrate: '5M' },
+  { quality: '480p', width: 854, height: 480, bitrate: '2M' },
+];
 
-function loadConfig() {
-  const defaults = { showForceQualityToast: true, showAutoRaiseToast: true };
+let ioRef = null;
+let config = { showForceQualityToast: true, showAutoRaiseToast: true };
 
+async function loadConfig() {
   try {
-    const raw = readFileSync(CONFIG_PATH, 'utf8');
-    const parsed = JSON.parse(raw);
-
-    if (typeof parsed !== 'object' || parsed === null) {
-      logger.warn('⚠️ config.json invalid: expected object, using defaults');
-      return defaults;
-    }
-
-    const validKeys = Object.keys(defaults);
-    const unknownKeys = Object.keys(parsed).filter(k => !validKeys.includes(k));
-    const missingKeys = validKeys.filter(k => !(k in parsed));
-
-    if (unknownKeys.length > 0) {
-      logger.warn(`⚠️ config.json unknown keys: ${unknownKeys.join(', ')} — ignoring`);
-    }
-    if (missingKeys.length > 0) {
-      logger.warn(`⚠️ config.json missing keys: ${missingKeys.join(', ')} — using defaults`);
-    }
-
-    const result = { ...defaults };
-    for (const key of validKeys) {
-      if (key in parsed && typeof parsed[key] === typeof defaults[key]) {
-        result[key] = parsed[key];
-      } else if (key in parsed) {
-        logger.warn(`⚠️ config.json key "${key}" has wrong type (expected ${typeof defaults[key]}), using default`);
-      }
-    }
-
-    logger.info('Config loaded from config.json');
-    return result;
-  } catch (err) {
-    if (err.code === 'ENOENT') {
-      logger.warn('⚠️ config.json not found, using defaults');
-    } else if (err instanceof SyntaxError) {
-      logger.warn('⚠️ config.json invalid JSON, using defaults');
-    } else {
-      logger.warn(`⚠️ config.json read error: ${err.message}, using defaults`);
-    }
-    return defaults;
-  }
-}
-
-let configDebounce = null;
-watch(CONFIG_PATH, () => {
-  clearTimeout(configDebounce);
-  configDebounce = setTimeout(() => {
-    config = loadConfig();
-    logger.info('Config reloaded from config.json');
-  }, 500);
-});
-
-function resolveConfig(key, envVar) {
-  if (envVar && process.env[envVar] !== undefined) {
-    return process.env[envVar] === 'true';
-  }
-  return config[key];
-}
-
-function shouldShowForceToast() {
-  return resolveConfig('showForceQualityToast', 'TWP_SHOW_FORCE_QUALITY_TOAST');
-}
-
-function shouldShowAutoRaiseToast() {
-  return resolveConfig('showAutoRaiseToast', 'TWP_SHOW_AUTO_RAISE_TOAST');
+    const { stdout } = await execAsync('cat /home/tomato/Work/movie-stream/config.json 2>/dev/null || echo "{}"');
+    const parsed = JSON.parse(stdout);
+    config = { ...config, ...parsed };
+  } catch {}
 }
 
 async function testEncoder(encoder) {
@@ -169,7 +103,7 @@ async function detectEncoder() {
   logger.info(`Transcode encoder: ${encoderConfig.encoder} (hardware: ${encoderConfig.hardware})`);
 }
 
-async function isBrowserCompatible(moviePath) {
+export async function isBrowserCompatible(moviePath) {
   const ext = moviePath.slice(moviePath.lastIndexOf('.')).toLowerCase();
   if (ext !== '.mp4' && ext !== '.m4v') return false;
   try {
@@ -185,54 +119,53 @@ async function isBrowserCompatible(moviePath) {
   }
 }
 
-async function probeDuration(moviePath) {
+function getMetaPath(streamPath) {
+  return streamPath + '.meta.json';
+}
+
+function getMeta(streamPath) {
   try {
-    const { stdout } = await execAsync(
-      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${moviePath}"`
-    );
-    return parseFloat(stdout.trim());
-  } catch {
-    return 0;
-  }
-}
-
-function getStreamPath2(movieName, quality) {
-  return join(STREAM_DIR, movieName + '.' + (quality || DEFAULT_QUALITY) + '.mp4');
-}
-
-function getMetaPath2(movieName) {
-  return join(STREAM_DIR, movieName + '.meta.json');
-}
-
-function getMeta2(movieName) {
-  try {
-    return JSON.parse(readFileSync(getMetaPath2(movieName), 'utf8'));
+    return JSON.parse(readFileSync(getMetaPath(streamPath), 'utf8'));
   } catch {
     return null;
   }
 }
 
-function saveMeta2(movieName, sourceStat, complete = false) {
-  writeFileSync(getMetaPath2(movieName), JSON.stringify({
+function saveMeta(streamPath, sourceStat, complete = false) {
+  writeFileSync(getMetaPath(streamPath), JSON.stringify({
     sourceSize: sourceStat.size,
     sourceMtime: sourceStat.mtimeMs,
     complete,
   }));
 }
 
-function isCacheValid2(movieName, sourceStat) {
-  const meta = getMeta2(movieName);
+function isCacheValid(streamPath, sourceStat) {
+  const meta = getMeta(streamPath);
   if (!meta || !meta.complete) return false;
   return meta.sourceSize === sourceStat.size && meta.sourceMtime === sourceStat.mtimeMs;
 }
 
-function buildTranscodeArgs(moviePath, streamPath) {
+function getStreamPath(movieName, quality) {
+  return join(STREAM_DIR, movieName, quality + '.mp4');
+}
+
+function getStreamDir(movieName) {
+  const dir = join(STREAM_DIR, movieName);
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+
+function buildTranscodeArgs(moviePath, outputPath, quality) {
+  const preset = QUALITY_PRESETS.find(q => q.quality === quality);
   const args = ['-i', moviePath];
 
   if (encoderConfig.hardware && encoderConfig.vaapiDevice) {
     args.unshift('-vaapi_device', encoderConfig.vaapiDevice);
   }
 
+  args.push('-vf', `scale=${preset.width}:${preset.height}`);
   args.push('-c:v', encoderConfig.encoder);
 
   if (encoderConfig.preset) {
@@ -244,9 +177,9 @@ function buildTranscodeArgs(moviePath, streamPath) {
   if (encoderConfig.encoder === 'h264_vaapi') {
     args.push('-qp', '24');
   } else {
-    args.push('-b:v', '8M');
+    args.push('-b:v', preset.bitrate);
   }
-  args.push('-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-y', streamPath);
+  args.push('-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-y', outputPath);
 
   return args;
 }
@@ -258,15 +191,7 @@ function resetPlaybackState() {
   lastReportedPosition = 0;
   lastReportTime = 0;
   transcoding = false;
-  transcodeProgress = 100;
-}
-
-function resetPlaybackKeepCache() {
-  isPlaying = false;
-  playbackStartTime = null;
-  playbackOffset = 0;
-  lastReportedPosition = 0;
-  lastReportTime = 0;
+  transcodeProgress = 0;
 }
 
 export function updateHostPosition(position) {
@@ -278,17 +203,13 @@ export function getMovieDir() {
   return MOVIE_DIR;
 }
 
-export function getStreamDir() {
+export function getStreamDirBase() {
   return STREAM_DIR;
-}
-
-export function getCurrentQuality() {
-  return currentQuality;
 }
 
 export async function getMovieList() {
   try {
-    const files = await readdir(MOVIE_DIR);
+    const files = await readdir(Movie_DIR);
     const movies = [];
 
     for (const file of files) {
@@ -306,8 +227,8 @@ export async function getMovieList() {
         duration = Math.round(parseFloat(stdout.trim()));
       } catch {}
 
-      const streamPath = getStreamPath2(file, DEFAULT_QUALITY);
-      const isCached = existsSync(streamPath) && isCacheValid2(file, fileStat);
+      const isCached = existsSync(getStreamPath(file, DEFAULT_QUALITY)) &&
+        isCacheValid(getStreamPath(file, DEFAULT_QUALITY), fileStat);
 
       movies.push({
         name: file,
@@ -315,7 +236,7 @@ export async function getMovieList() {
         size: fileStat.size,
         duration,
         cached: isCached,
-        qualities: QUALITIES,
+        qualities: QUALITY_PRESETS.map(q => q.quality),
       });
     }
 
@@ -341,7 +262,6 @@ export function getPlaybackState() {
 
   return {
     movie: currentMovie,
-    quality: currentQuality,
     isPlaying,
     currentTime: Math.max(0, currentTime),
     transcoding,
@@ -370,52 +290,41 @@ export async function playMovie(movieName, quality) {
 
   const sourceStat = await stat(moviePath);
   const effectiveQuality = quality || DEFAULT_QUALITY;
-  const masterPath = getStreamPath2(movieName, DEFAULT_QUALITY);
-  const streamPath = getStreamPath2(movieName, effectiveQuality);
+  const streamPath = getStreamPath(movieName, effectiveQuality);
 
-  if (existsSync(masterPath) && isCacheValid2(movieName, sourceStat)) {
+  if (existsSync(streamPath) && isCacheValid(streamPath, sourceStat)) {
     logger.info(`Cache hit: ${movieName}`);
     stopTranscoding();
     currentMovie = movieName;
-    currentQuality = effectiveQuality;
     resetPlaybackKeepCache();
+    deriveQualitiesInBackground(movieName, streamPath);
     return getPlaybackState();
   }
 
   stopTranscoding();
 
-  if (existsSync(masterPath)) {
-    unlinkSync(masterPath);
-    rmSync(getMetaPath2(movieName), { force: true });
-  }
-
-  if (existsSync(streamPath)) {
-    unlinkSync(streamPath);
-  }
-  const outputPath = getStreamPath2(movieName, DEFAULT_QUALITY);
+  getStreamDir(movieName);
 
   if (await isBrowserCompatible(moviePath)) {
-    logger.info(`Direct copy: ${movieName}`);
-    copyFileSync(moviePath, outputPath);
-    saveMeta2(movieName, sourceStat, true);
+    logger.info(`Direct copy: ${movieName} (${effectiveQuality})`);
+    copyFileSync(moviePath, streamPath);
+    saveMeta(streamPath, sourceStat, true);
     currentMovie = movieName;
-    currentQuality = effectiveQuality;
-    resetPlaybackKeepCache();
-    deriveQualitiesInBackground(movieName, outputPath);
+    resetPlaybackState();
     return getPlaybackState();
   }
 
-  logger.info(`Transcoding: ${movieName} (${DEFAULT_QUALITY})`);
+  logger.info(`Transcoding: ${movieName} (${effectiveQuality})`);
 
-  saveMeta2(movieName, sourceStat, false);
+  saveMeta(streamPath, sourceStat, false);
 
   transcoding = true;
   transcodeProgress = 0;
 
   try {
     const totalDuration = await probeDuration(moviePath);
-    const args = buildTranscodeArgs(moviePath, outputPath);
-    streamProcess = spawn('ffmpeg', args);
+
+    streamProcess = spawn('ffmpeg', buildTranscodeArgs(moviePath, streamPath, effectiveQuality));
 
     streamProcess.stderr?.on('data', (data) => {
       const output = data.toString();
@@ -434,8 +343,8 @@ export async function playMovie(movieName, quality) {
       transcoding = false;
       if (code === 0) {
         transcodeProgress = 100;
-        saveMeta2(movieName, sourceStat, true);
-        deriveQualitiesInBackground(movieName, outputPath);
+        saveMeta(streamPath, sourceStat, true);
+        deriveQualitiesInBackground(movieName, streamPath);
       }
       streamProcess = null;
       ioRef?.emit('playbackUpdate', getPlaybackState());
@@ -455,8 +364,7 @@ export async function playMovie(movieName, quality) {
   }
 
   currentMovie = movieName;
-  currentQuality = effectiveQuality;
-  resetPlaybackKeepCache();
+  resetPlaybackState();
 
   return getPlaybackState();
 }
@@ -491,13 +399,7 @@ export async function seekPlayback(time) {
 
 export function endPlayback() {
   currentMovie = null;
-  currentQuality = DEFAULT_QUALITY;
-  isPlaying = false;
-  playbackStartTime = null;
-  playbackOffset = 0;
-  lastReportedPosition = 0;
-  lastReportTime = 0;
-  movieDuration = 0;
+  resetPlaybackState();
   return getPlaybackState();
 }
 
@@ -505,48 +407,49 @@ export async function changeQuality(movieName, newQuality) {
   if (movieName !== currentMovie) {
     return playMovie(movieName, newQuality);
   }
-
-  const moviePath = join(MOVIE_DIR, movieName);
-  const streamPath = getStreamPath2(movieName, newQuality);
-
-  if (existsSync(streamPath) && isCacheValid2(movieName, await stat(moviePath))) {
-    logger.info(`Quality switch: ${movieName} → ${newQuality}`);
-    currentQuality = newQuality;
-    return getPlaybackState();
-  }
-
   return getPlaybackState();
 }
 
-const QUALITY_DERIVES = [
-  { quality: '720p', width: 1280, height: 720, bitrate: '5M' },
-  { quality: '480p', width: 854, height: 480, bitrate: '2M' },
-];
+export async function deriveQualitiesInBackground(movieName, masterPath) {
+  const derivations = QUALITY_PRESETS.filter(p => p.quality !== DEFAULT_QUALITY);
 
-async function deriveQualitiesInBackground(movieName, masterPath) {
-  for (const derive of QUALITY_DERIVES) {
-    const outputPath = getStreamPath2(movieName, derive.quality);
-    if (existsSync(outputPath)) continue;
+  await Promise.all(derivations.map(async (preset) => {
+    const outputPath = getStreamPath(movieName, preset.quality);
+    if (existsSync(outputPath)) return;
 
-    logger.info(`Deriving ${derive.quality} for ${movieName}`);
+    const ffmpegArgs = [
+      '-i', masterPath,
+      '-vf', `scale=${preset.width}:${preset.height}`,
+      '-c:v', encoderConfig.encoder,
+      ...(encoderConfig.preset ? ['-preset', encoderConfig.preset] : []),
+      ...(!encoderConfig.hardware ? ['-tune', 'film'] : []),
+      ...(encoderConfig.encoder === 'h264_vaapi' ? ['-qp', '24'] : ['-b:v', preset.bitrate]),
+      '-c:a', 'aac', '-b:a', '128k',
+      '-movflags', '+faststart',
+      '-y', outputPath,
+    ];
+
+    logger.info(`Deriving ${preset.quality} for ${movieName}: ffmpeg ${ffmpegArgs.join(' ')}`);
+
     try {
       await new Promise((resolve, reject) => {
-        const proc = spawn('ffmpeg', [
-          '-i', masterPath,
-          '-vf', `scale=${derive.width}:${derive.height}`,
-          '-c:v', 'libx264', '-preset', 'ultrafast',
-          '-b:v', derive.bitrate,
-          '-c:a', 'copy',
-          '-y', outputPath,
-        ]);
-        proc.on('exit', code => code === 0 ? resolve() : reject(new Error(`derive ${derive.quality} failed`)));
+        const proc = spawn('ffmpeg', ffmpegArgs);
+        let stderr = '';
+        proc.stderr?.on('data', (d) => { stderr += d.toString(); });
+        proc.on('exit', (code) => {
+          if (code === 0) resolve();
+          else reject(new Error(`exit code ${code}: ${stderr.slice(-200)}`));
+        });
         proc.on('error', reject);
       });
-      logger.info(`Derived ${derive.quality} for ${movieName}`);
+
+      const sourceStat = await stat(join(MOVIE_DIR, movieName));
+      saveMeta(outputPath, sourceStat, true);
+      logger.info(`Derived ${preset.quality} for ${movieName} (${stat(outputPath).size} bytes)`);
     } catch (err) {
-      logger.error(`Derive error: ${err.message}`);
+      logger.error(`Derive failed: ${err.message}`);
     }
-  }
+  }));
 }
 
 function stopTranscoding() {
@@ -559,23 +462,24 @@ function stopTranscoding() {
 }
 
 export async function initCache() {
+  await loadConfig();
   if (!existsSync(STREAM_DIR)) return;
-  const files = await readdir(STREAM_DIR);
-  for (const file of files) {
-    if (!file.endsWith('.mp4') || file.endsWith('.meta.json')) continue;
-
-    const movieName = file.replace('.mp4', '');
-    if (movieName.includes('.')) continue;
-
-    const masterPath = getStreamPath2(movieName, DEFAULT_QUALITY);
-    if (existsSync(masterPath) && !existsSync(getMetaPath2(movieName))) {
-      const streamStat = await stat(masterPath);
-      if (streamStat.size > 100 * 1024 * 1024) {
-        const sourcePath = join(MOVIE_DIR, movieName);
-        if (existsSync(sourcePath)) {
-          saveMeta2(movieName, await stat(sourcePath), true);
-          logger.info(`Rebuilt cache: ${movieName}`);
-          deriveQualitiesInBackground(movieName, masterPath);
+  const dirs = await readdir(STREAM_DIR);
+  for (const dir of dirs) {
+    const dirPath = join(STREAM_DIR, dir);
+    const dirStat = await stat(dirPath);
+    if (!dirStat.isDirectory()) continue;
+    for (const preset of QUALITY_PRESETS) {
+      const streamPath = join(dirPath, preset.quality + '.mp4');
+      if (!existsSync(streamPath)) continue;
+      if (!existsSync(getMetaPath(streamPath))) {
+        const streamStat = await stat(streamPath);
+        if (streamStat.size > 100 * 1024 * 1024) {
+          const sourcePath = join(MOVIE_DIR, dir);
+          if (existsSync(sourcePath)) {
+            saveMeta(streamPath, await stat(sourcePath), true);
+            logger.info(`Rebuilt cache: ${dir}/${preset.quality}`);
+          }
         }
       }
     }
