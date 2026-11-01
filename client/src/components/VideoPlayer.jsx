@@ -22,6 +22,8 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
   const [pingMs, setPingMs] = useState(0);
   const [showBanner, setShowBanner] = useState(false);
   const [toasts, setToasts] = useState([]);
+  const [subtitleTracks, setSubtitleTracks] = useState([]);
+  const [selectedSubtitle, setSelectedSubtitle] = useState(-1);
 
   const streamUrl = useMemo(() => {
     return playbackState.movie && !playbackState.transcoding
@@ -106,6 +108,37 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
       clearInterval(pollInterval);
     };
   }, [onTimeUpdate, streamUrl, isHost, emit]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const enumerateSubtitles = () => {
+      const tracks = [];
+      for (let i = 0; i < video.textTracks.length; i++) {
+        const tt = video.textTracks[i];
+        if (tt.kind === "subtitles" || tt.kind === "captions") {
+          tt.mode = "hidden";
+          tracks.push({ index: i, label: tt.label || tt.language || `Track ${i + 1}`, language: tt.language });
+        }
+      }
+      setSubtitleTracks(tracks);
+      setSelectedSubtitle(-1);
+    };
+
+    video.addEventListener("loadedmetadata", enumerateSubtitles);
+    return () => video.removeEventListener("loadedmetadata", enumerateSubtitles);
+  }, [streamUrl]);
+
+  const handleSubtitleChange = useCallback((e) => {
+    const idx = parseInt(e.target.value);
+    setSelectedSubtitle(idx);
+    const video = videoRef.current;
+    if (!video) return;
+    for (let i = 0; i < video.textTracks.length; i++) {
+      video.textTracks[i].mode = i === idx ? "showing" : "hidden";
+    }
+  }, []);
 
   const tryPlay = useCallback(() => {
     if (!videoRef.current) return;
@@ -486,6 +519,19 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
             <option key={q} value={q}>{q}</option>
           ))}
         </select>
+        {subtitleTracks.length > 0 && (
+          <select
+            className="subtitle-selector"
+            value={selectedSubtitle}
+            onChange={handleSubtitleChange}
+            title="Subtitles"
+          >
+            <option value={-1}>Subs: Off</option>
+            {subtitleTracks.map(t => (
+              <option key={t.index} value={t.index}>{t.label}</option>
+            ))}
+          </select>
+        )}
         <div className="volume-control">
           <button className="mute-btn" onClick={() => setIsMuted(m => !m)} title={isMuted ? 'Unmute' : 'Mute'}>
             {isMuted ? '🔇' : volume > 0.5 ? '🔊' : volume > 0 ? '🔉' : '🔈'}

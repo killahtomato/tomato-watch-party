@@ -1,0 +1,315 @@
+#!/usr/bin/env node
+import { getMovieDir, getStreamDirBase } from "./server/streamManager.js";
+import { stat } from "fs/promises";
+import { join } from "path";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "fs";
+import { exec, spawn } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
+const QUALITIES = ["1080p", "720p", "480p"];
+const IMAGE_SUB_CODECS = new Set(["pgssub", "dvd_subtitle", "vobsub", "dvb_subtitle", "hdmv_pgs_subtitle"]);
+
+const RED = "\x1b[31m";
+const GREEN = "\x1b[32m";
+const YELLOW = "\x1b[33m";
+const CYAN = "\x1b[36m";
+const BOLD = "\x1b[1m";
+const DIM = "\x1b[2m";
+const RESET = "\x1b[0m";
+
+function clearLine() {
+  process.stdout.write("\r\x1b[K");
+}
+
+function formatTime(seconds) {
+  if (!isFinite(seconds) || seconds <= 0) return "calculating...";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function formatSize(bytes) {
+  if (bytes > 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  if (bytes > 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(0)} MB`;
+  return `${(bytes / 1024).toFixed(0)} KB`;
+}
+
+function pacmanBar(progress, width = 30) {
+  const filled = Math.round((progress / 100) * width);
+  const empty = width - filled;
+  let bar = `${CYAN} [`;
+  for (let i = 0; i < filled; i++) {
+    if (i % 2 === 0) bar += `${YELLOW}ᗧ${RESET}${CYAN}`;
+    else bar += `${YELLOW}•${RESET}${CYAN}`;
+  }
+  const munch = filled % 2 === 1 ? " C" : "O";
+  bar += `${YELLOW}${munch}${RESET}${CYAN}`;
+  for (let i = filled + 1; i < width; i++) {
+    if (i % 2 === 0) bar += `${DIM}·${RESET}${CYAN}`;
+    else bar += " ";
+  }
+  bar += `] ${RESET}`;
+  return bar;
+}
+
+async function probeDuration(filePath) {
+  try {
+    const { stdout } = await execAsync(
+      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`
+    );
+    return parseFloat(stdout.trim());
+  } catch {
+    return 0;
+  }
+}
+
+async function probeSubtitleCodecs(filePath) {
+  try {
+    const { stdout } = await execAsync(
+      `ffprobe -v error -select_streams s -show_entries stream=codec_name -of csv=p=0 "${filePath}"`
+    );
+    return stdout.trim().split("\n").filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+async function probeAudioCodecs(filePath) {
+  try {
+    const { stdout } = await execAsync(
+      `ffprobe -v error -select_streams a -show_entries stream=codec_name:stream_tags=language -of csv=p=0 "${filePath}"`
+    );
+    return stdout.trim().split("\n").filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+async function transcodeQuality(moviePath, outputPath, quality, totalDuration, includeSubs) {
+  const dir = join(outputPath, "..");
+  if (!existsSync(dir)) {
+    const { mkdirSync } = await import("fs");
+    mkdirSync(dir, { recursive: true });
+  }
+
+  const scaleFilter = quality === "720p" ? "scale=1280:720" : quality === "480p" ? "scale=854:480" : "scale=1920:1080";
+  const bitrate = quality === "720p" ? "5M" : quality === "480p" ? "2M" : "8M";
+
+  const args = [
+    "-i", moviePath,
+    "-map", "0:v:0",
+    "-map", "0:a",
+  ];
+
+  if (includeSubs) {
+    args.push("-map", "0:s?");
+  }
+
+  args.push(
+    "-vf", scaleFilter,
+    "-c:v", "libx264",
+    "-preset", "ultrafast",
+    "-tune", "fastdecode",
+    "-b:v", bitrate,
+    "-c:a", "aac",
+    "-b:a", "128k",
+  );
+
+  if (includeSubs) {
+    args.push("-c:s", "mov_text");
+  }
+
+  args.push("-movflags", "+faststart", "-y", outputPath);
+
+  return new Promise((resolve, reject) => {
+    const proc = spawn("ffmpeg", args);
+
+    let lastProgress = 0;
+    let startTime = Date.now();
+
+    proc.stderr?.on("data", (data) => {
+      const output = data.toString();
+      const timeMatch = output.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
+      if (timeMatch && totalDuration > 0) {
+        const h = parseInt(timeMatch[1]);
+        const m = parseInt(timeMatch[2]);
+        const s = parseInt(timeMatch[3]);
+        const currentSec = h * 3600 + m * 60 + s;
+        lastProgress = Math.min(100, Math.round((currentSec / totalDuration) * 100));
+        const elapsed = (Date.now() - startTime) / 1000;
+        const rate = currentSec / elapsed;
+        const remaining = rate > 0 ? (totalDuration - currentSec) / rate : 0;
+
+        clearLine();
+        process.stdout.write(
+          `  ${pacmanBar(lastProgress)} ${BOLD}${lastProgress}%${RESET} ` +
+          `${DIM}│${RESET} ${formatTime(remaining)} remaining`
+        );
+      }
+    });
+
+    proc.on("exit", (code) => {
+      clearLine();
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`FFmpeg exited with code ${code}`));
+      }
+    });
+
+    proc.on("error", (err) => {
+      clearLine();
+      reject(err);
+    });
+  });
+}
+
+function writeMeta(outputPath, sourceStat) {
+  const metaPath = outputPath + ".meta.json";
+  writeFileSync(metaPath, JSON.stringify({
+    sourceSize: sourceStat.size,
+    sourceMtime: sourceStat.mtimeMs,
+    complete: true,
+  }));
+}
+
+async function main() {
+  console.log(`\n${BOLD}${CYAN}  🍅 Tomato Watch Party — Batch Transcoder${RESET}\n`);
+
+  const movieDir = getMovieDir();
+  const streamBase = getStreamDirBase();
+  const VIDEO_EXT = [".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".wmv", ".m4v"];
+
+  let files;
+  try {
+    files = readdirSync(movieDir);
+  } catch {
+    console.log(`  ${RED}Cannot read movie directory: ${movieDir}${RESET}`);
+    process.exit(1);
+  }
+
+  let movies = [];
+  for (const file of files) {
+    const ext = file.lastIndexOf(".") > 0 ? file.slice(file.lastIndexOf(".")).toLowerCase() : "";
+    if (!VIDEO_EXT.includes(ext)) continue;
+    const filePath = join(movieDir, file);
+    let duration = 0;
+    try {
+      duration = await probeDuration(filePath);
+    } catch {}
+
+    const fileStat = await stat(filePath);
+
+    const subCodecs = await probeSubtitleCodecs(filePath);
+    const audioInfo = await probeAudioCodecs(filePath);
+
+    const hasImageSubs = subCodecs.some(c => IMAGE_SUB_CODECS.has(c));
+    const hasTextSubs = subCodecs.some(c => !IMAGE_SUB_CODECS.has(c));
+    const includeSubs = hasTextSubs && !hasImageSubs;
+
+    let needsTranscode = false;
+    let existingQualities = [];
+    for (const q of QUALITIES) {
+      const sp = join(streamBase, file, q + ".mp4");
+      const mp = sp + ".meta.json";
+      if (!existsSync(sp) || !existsSync(mp)) {
+        needsTranscode = true;
+        continue;
+      }
+      try {
+        const meta = JSON.parse(readFileSync(mp, "utf8"));
+        if (meta.sourceSize !== fileStat.size || meta.sourceMtime !== fileStat.mtimeMs || !meta.complete) {
+          needsTranscode = true;
+          continue;
+        }
+      } catch {
+        needsTranscode = true;
+        continue;
+      }
+      existingQualities.push(q);
+    }
+
+    movies.push({
+      name: file,
+      duration,
+      needsTranscode,
+      existingQualities,
+      size: fileStat.size,
+      audioTracks: audioInfo.length,
+      subTracks: subCodecs.length,
+      includeSubs,
+      hasImageSubs,
+      fileStat,
+    });
+  }
+
+  const pending = movies.filter((m) => m.needsTranscode);
+  const alreadyDone = movies.filter((m) => !m.needsTranscode);
+
+  if (alreadyDone.length > 0) {
+    console.log(`  ${DIM}${alreadyDone.length} movie(s) already fully transcoded:${RESET}`);
+    for (const m of alreadyDone) {
+      console.log(`    ${GREEN}✓${RESET} ${DIM}${m.name}${RESET}`);
+    }
+    console.log();
+  }
+
+  if (pending.length === 0) {
+    console.log(`  ${GREEN}All movies already transcoded. Nothing to do.${RESET}\n`);
+    process.exit(0);
+  }
+
+  console.log(`  ${BOLD}${pending.length} movie(s) need transcoding.${RESET}\n`);
+
+  let totalStart = Date.now();
+
+  for (let i = 0; i < pending.length; i++) {
+    const movie = pending[i];
+    console.log(`  ${BOLD}[${i + 1}/${pending.length}]${RESET} ${CYAN}${movie.name}${RESET}`);
+    console.log(`  ${DIM}Duration: ${formatTime(movie.duration)} │ Size: ${formatSize(movie.size)} │ Audio: ${movie.audioTracks} track(s) │ Subtitles: ${movie.subTracks} track(s)${RESET}`);
+
+    if (movie.hasImageSubs) {
+      console.log(`  ${YELLOW}⚠ Image-based subtitles detected — skipping (cannot convert to mov_text)${RESET}`);
+    } else if (movie.includeSubs) {
+      console.log(`  ${DIM}Including all text subtitles (${movie.subTracks} tracks) as mov_text${RESET}`);
+    }
+
+    const moviePath = join(movieDir, movie.name);
+
+    for (const quality of QUALITIES) {
+      const outputPath = join(streamBase, movie.name, quality + ".mp4");
+      const existing = movie.existingQualities.includes(quality);
+
+      if (existing) {
+        console.log(`    ${GREEN}✓ ${quality}${RESET} ${DIM}(already done)${RESET}`);
+        continue;
+      }
+
+      process.stdout.write(`    ${YELLOW}▶ ${quality}${RESET} ... `);
+      const startTime = Date.now();
+
+      try {
+        await transcodeQuality(moviePath, outputPath, quality, movie.duration, movie.includeSubs);
+        writeMeta(outputPath, movie.fileStat);
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+        console.log(`    ${GREEN}✓ ${quality}${RESET} ${DIM}(${elapsed}s)${RESET}`);
+      } catch (err) {
+        console.log(`    ${RED}✗ ${quality}${RESET} ${DIM}(${err.message})${RESET}`);
+      }
+    }
+
+    console.log();
+  }
+
+  const totalElapsed = (Date.now() - totalStart) / 1000;
+  console.log(`  ${BOLD}${GREEN}  🍅 All done!${RESET} ${DIM}Total time: ${formatTime(totalElapsed)}${RESET}\n`);
+}
+
+main().catch((err) => {
+  console.error(`\n  ${RED}Fatal error: ${err.message}${RESET}\n`);
+  process.exit(1);
+});

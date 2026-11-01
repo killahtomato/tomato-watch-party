@@ -196,6 +196,10 @@ function buildTranscodeArgs(moviePath, outputPath, quality) {
   const preset = QUALITY_PRESETS.find(q => q.quality === quality);
   const args = ['-i', moviePath];
 
+  args.push('-map', '0:v:0');
+  args.push('-map', '0:a');
+  args.push('-map', '0:s?');
+
   if (encoderConfig.hardware && encoderConfig.vaapiDevice) {
     args.unshift('-vaapi_device', encoderConfig.vaapiDevice);
   }
@@ -214,7 +218,9 @@ function buildTranscodeArgs(moviePath, outputPath, quality) {
   } else {
     args.push('-b:v', preset.bitrate);
   }
-  args.push('-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-y', outputPath);
+  args.push('-c:a', 'aac', '-b:a', '128k');
+  args.push('-c:s', 'mov_text');
+  args.push('-movflags', '+faststart', '-y', outputPath);
 
   return args;
 }
@@ -480,12 +486,16 @@ export async function deriveQualitiesInBackground(movieName, masterPath) {
 
     const ffmpegArgs = [
       '-i', masterPath,
+      '-map', '0:v:0',
+      '-map', '0:a',
+      '-map', '0:s?',
       '-vf', `scale=${preset.width}:${preset.height}`,
       '-c:v', encoderConfig.encoder,
       ...(encoderConfig.preset ? ['-preset', encoderConfig.preset] : []),
-      ...(!encoderConfig.hardware ? ['-tune', 'film'] : []),
+      ...(!encoderConfig.hardware ? ['-tune', 'fastdecode'] : []),
       ...(encoderConfig.encoder === 'h264_vaapi' ? ['-qp', '24'] : ['-b:v', preset.bitrate]),
       '-c:a', 'aac', '-b:a', '128k',
+      '-c:s', 'mov_text',
       '-movflags', '+faststart',
       '-y', outputPath,
     ];
