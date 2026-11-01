@@ -1,4 +1,14 @@
 #!/usr/bin/env node
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log("Usage: twp-transcode");
+  console.log("  Batch transcode all movies in the movies folder.");
+  console.log("  Skips movies already fully transcoded (checks .meta.json cache).");
+  console.log("  Transcodes all qualities: 1080p, 720p, 480p.");
+  console.log("  Preserves all audio tracks and converts text subtitles to mov_text.");
+  console.log("  Env: MOVIE_DIR (default ./movies), STREAM_DIR (default ./streams).");
+  process.exit(0);
+}
+
 import { getMovieDir, getStreamDirBase } from "./server/streamManager.js";
 import { stat } from "fs/promises";
 import { join } from "path";

@@ -11,7 +11,7 @@ export default function App() {
   const [viewerCount, setViewerCount] = useState(0);
   const [sessionData, setSessionData] = useState(null);
   const [joining, setJoining] = useState(false);
-  const [displayTime, setDisplayTime] = useState(0);
+  const [playbackPercent, setPlaybackPercent] = useState(0);
   const [joinError, setJoinError] = useState(null);
   const [errorKey, setErrorKey] = useState(0);
   const [viewerPanelOpen, setViewerPanelOpen] = useState(false);
@@ -21,6 +21,10 @@ export default function App() {
   const seekRef = useRef(null);
   const playRef = useRef(null);
   const pauseRef = useRef(null);
+
+  const handleSeekPercent = useCallback((pct) => {
+    setPlaybackPercent(pct);
+  }, []);
 
   useEffect(() => {
     const token = sessionStorage.getItem('hostToken');
@@ -148,7 +152,7 @@ export default function App() {
           emit={emit}
           on={on}
           sessionData={sessionData}
-          onTimeUpdate={setDisplayTime}
+          onTimeUpdate={setPlaybackPercent}
           seekRef={seekRef}
           playRef={playRef}
           pauseRef={pauseRef}
@@ -157,10 +161,11 @@ export default function App() {
           <HostControls
             emit={emit}
             on={on}
-            currentTime={displayTime}
+            playbackPercent={playbackPercent}
             seekRef={seekRef}
             playRef={playRef}
             pauseRef={pauseRef}
+            onSeekPercent={handleSeekPercent}
           />
         )}
       </div>

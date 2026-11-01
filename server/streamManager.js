@@ -15,6 +15,8 @@ const execAsync = promisify(exec);
 const MOVIE_DIR = process.env.MOVIE_DIR || './movies';
 const STREAM_DIR = process.env.STREAM_DIR || './streams';
 
+export { STREAM_DIR };
+
 const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv', '.wmv', '.m4v'];
 const DEFAULT_QUALITY = '1080p';
 
@@ -190,6 +192,40 @@ export function getStreamDir(movieName) {
     return dir;
   }
   return STREAM_DIR;
+}
+
+const REMUX_DIR = join(STREAM_DIR, '_remux');
+
+export function getRemuxPath(movieName, quality, audioIdx, subIdx) {
+  return join(REMUX_DIR, movieName, quality, `a${audioIdx}_s${subIdx}.mp4`);
+}
+
+export async function remuxForTracks(movieName, quality, audioIdx, subIdx) {
+  const remuxPath = getRemuxPath(movieName, quality, audioIdx, subIdx);
+  if (existsSync(remuxPath)) return remuxPath;
+
+  mkdirSync(dirname(remuxPath), { recursive: true });
+  const src = getStreamPath(movieName, quality);
+
+  const args = [
+    '-i', src,
+    '-map', '0:v:0',
+    '-map', `0:a:${audioIdx}`,
+  ];
+  if (subIdx >= 0) {
+    args.push('-map', `0:s:${subIdx}`);
+  }
+  args.push(
+    '-c', 'copy',
+    '-movflags', '+faststart',
+    '-y', remuxPath
+  );
+
+  const { exec } = await import('child_process');
+  const { promisify } = await import('util');
+  const execAsync = promisify(exec);
+  await execAsync(`ffmpeg ${args.join(' ')}`);
+  return remuxPath;
 }
 
 function buildTranscodeArgs(moviePath, outputPath, quality) {

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 
 const QUALITY_PRESETS = ['1080p', '720p', '480p'];
 
-export default function HostControls({ emit, on, currentTime, seekRef, playRef, pauseRef }) {
+export default function HostControls({ emit, on, playbackPercent, seekRef, playRef, pauseRef, onSeekPercent }) {
   const [movies, setMovies] = useState([]);
   const [playbackState, setPlaybackState] = useState(null);
   const [dragTime, setDragTime] = useState(null);
@@ -44,31 +44,41 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
     emit('host:resume', {});
   };
 
+  const movieDuration = playbackState?.movie
+    ? movies.find((m) => m.name === playbackState.movie)?.duration || 0
+    : 0;
+
   const handleSkip = useCallback(
     (delta) => {
-      const newTime = Math.max(0, currentTime + delta);
+      const currentSec = (playbackPercent / 100) * movieDuration;
+      const newTime = Math.max(0, Math.min(movieDuration, currentSec + delta));
       if (seekRef?.current) seekRef.current(newTime);
       emit('host:seek', { time: newTime });
     },
-    [currentTime, seekRef, emit]
+    [playbackPercent, movieDuration, seekRef, emit]
   );
 
   const handleSeek = useCallback(
     (e) => {
-      const time = parseFloat(e.target.value);
-      setDragTime(time);
-      if (seekRef?.current) seekRef.current(time);
+      const pct = parseFloat(e.target.value);
+      setDragTime(pct);
+      if (movieDuration > 0 && seekRef?.current) {
+        seekRef.current((pct / 100) * movieDuration);
+      }
     },
-    [seekRef]
+    [movieDuration, seekRef]
   );
 
   const handleSeekEnd = useCallback(
     (e) => {
-      const time = parseFloat(e.target.value);
+      const pct = parseFloat(e.target.value);
       setDragTime(null);
-      emit('host:seek', { time });
+      if (movieDuration > 0) {
+        emit('host:seek', { time: (pct / 100) * movieDuration });
+      }
+      onSeekPercent(pct);
     },
-    [emit]
+    [movieDuration, emit, onSeekPercent]
   );
 
   const handleReactionsToggle = useCallback(() => {
@@ -87,10 +97,6 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
     [emit]
   );
 
-  const movieDuration = playbackState?.movie
-    ? movies.find((m) => m.name === playbackState.movie)?.duration || 0
-    : 0;
-
   return (
     <div className="host-controls">
       <h3>Host Controls</h3>
@@ -98,7 +104,7 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
       {playbackState?.movie && (
         <div className="now-playing">
           <span className="host-movie-title">{playbackState.movie.replace(/\.[^.]+$/, '')}</span>
-          <span className="time">{formatTime(currentTime)} / {formatTime(movieDuration)}</span>
+          <span className="time">{formatTime((playbackPercent / 100) * movieDuration)} / {formatTime(movieDuration)}</span>
         </div>
       )}
 
@@ -107,17 +113,17 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
           <input
             type="range"
             min={0}
-            max={movieDuration}
-            step={1}
-            value={dragTime !== null ? dragTime : Math.min(currentTime, movieDuration)}
-            onMouseDown={() => setDragTime(currentTime)}
-            onTouchStart={() => setDragTime(currentTime)}
+            max={100}
+            step={0.1}
+            value={dragTime !== null ? dragTime : Math.min(playbackPercent, 100)}
+            onMouseDown={() => setDragTime(playbackPercent)}
+            onTouchStart={() => setDragTime(playbackPercent)}
             onChange={handleSeek}
             onMouseUp={handleSeekEnd}
             onTouchEnd={handleSeekEnd}
           />
           <div className="seek-labels">
-            <span>{formatTime(currentTime)}</span>
+            <span>{formatTime((playbackPercent / 100) * movieDuration)}</span>
             <span>{formatTime(movieDuration)}</span>
           </div>
         </div>
@@ -137,7 +143,7 @@ export default function HostControls({ emit, on, currentTime, seekRef, playRef, 
               <button onClick={handlePause}>⏸ Pause</button>
             ) : (
               <button onClick={handleResume}>
-                {currentTime > 0 ? '▶ Resume' : '▶ Play'}
+                {playbackPercent > 0 ? '▶ Resume' : '▶ Play'}
               </button>
             )}
           </>

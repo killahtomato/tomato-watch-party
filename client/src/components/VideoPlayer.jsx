@@ -3,10 +3,53 @@ import ThrowButton from './ThrowButton.jsx';
 
 const QUALITY_PRESETS = ['1080p', '720p', '480p'];
 
+function parseVtt(text) {
+  const lines = text.trim().split(/\r?\n/);
+  const entries = [];
+  let current = null;
+  for (const line of lines) {
+    const timeMatch = line.match(/^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})[.,](\d{1,3})\s*-->\s*(?:(\d{1,2}):)?(\d{1,2}):(\d{2})[.,](\d{1,3})/);
+    if (timeMatch) {
+      if (current && current.text) entries.push(current);
+      const h1 = timeMatch[1] ? parseInt(timeMatch[1]) : 0;
+      const start = h1 * 3600 + parseInt(timeMatch[2]) * 60 + parseInt(timeMatch[3]) + parseInt(timeMatch[4].padEnd(3, '0')) / 1000;
+      const h2 = timeMatch[5] ? parseInt(timeMatch[5]) : 0;
+      const end = h2 * 3600 + parseInt(timeMatch[6]) * 60 + parseInt(timeMatch[7]) + parseInt(timeMatch[8].padEnd(3, '0')) / 1000;
+      current = { start, end, text: '' };
+    } else if (current && line.trim() && !line.startsWith('WEBVTT') && !line.startsWith('NOTE') && !line.match(/^\d+$/)) {
+      const cleanLine = line.replace(/<[^>]+>/g, '').trim();
+      if (cleanLine) {
+        current.text += (current.text ? '\n' : '') + cleanLine;
+      }
+    }
+  }
+  if (current && current.text) entries.push(current);
+  return entries;
+}
+
+const LANG_MAP = {
+  eng: 'English', jpn: 'Japanese', ara: 'Arabic', cat: 'Catalan', cze: 'Czech',
+  dan: 'Danish', ger: 'German', gre: 'Greek', spa: 'Spanish', baq: 'Basque',
+  fin: 'Finnish', fil: 'Filipino', fre: 'French', glg: 'Galician', heb: 'Hebrew',
+  hrv: 'Croatian', hun: 'Hungarian', ind: 'Indonesian', ita: 'Italian', kor: 'Korean',
+  may: 'Malay', nob: 'Norwegian', dut: 'Dutch', pol: 'Polish', por: 'Portuguese',
+  rum: 'Romanian', rus: 'Russian', swe: 'Swedish', tha: 'Thai', tur: 'Turkish',
+  ukr: 'Ukrainian', vie: 'Vietnamese', chi: 'Chinese', und: 'Unknown',
+};
+
+function formatLabel(lang, title) {
+  const langName = LANG_MAP[lang] || lang.toUpperCase();
+  if (title) return `${langName} (${title})`;
+  return langName;
+}
+
 export default function VideoPlayer({ userName, isHost, emit, on, sessionData, onTimeUpdate, seekRef, playRef, pauseRef }) {
   const videoRef = useRef(null);
+  const audioRef = useRef(null);
   const playbackRef = useRef({ isPlaying: false, currentTime: 0 });
   const isQualitySwitching = useRef(false);
+  const lastSeekTime = useRef(0);
+  const subIntervalRef = useRef(null);
   const [playbackState, setPlaybackState] = useState(
     sessionData?.playbackState || { movie: null, isPlaying: false, currentTime: 0, transcoding: false, transcodeProgress: 0 }
   );
@@ -15,6 +58,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
   const [volume, setVolume] = useState(1);
   const [splattering, setSplattering] = useState({});
   const [reactionsEnabled, setReactionsEnabled] = useState(true);
+  const [reactions, setReactions] = useState([]);
   const [movieEnded, setMovieEnded] = useState(false);
   const [videoError, setVideoError] = useState(false);
   const [currentQuality, setCurrentQuality] = useState('1080p');
@@ -24,12 +68,23 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
   const [toasts, setToasts] = useState([]);
   const [subtitleTracks, setSubtitleTracks] = useState([]);
   const [selectedSubtitle, setSelectedSubtitle] = useState(-1);
+  const [audioTracks, setAudioTracks] = useState([]);
+  const [selectedAudio, setSelectedAudio] = useState(0);
+  const [trackInfo, setTrackInfo] = useState({ audio: [], subs: [] });
+  const [subEntries, setSubEntries] = useState([]);
+  const [currentSubText, setCurrentSubText] = useState('');
 
   const streamUrl = useMemo(() => {
     return playbackState.movie && !playbackState.transcoding
       ? `/stream/${encodeURIComponent(playbackState.movie)}/${currentQuality}.mp4`
       : null;
   }, [playbackState.movie, playbackState.transcoding, currentQuality]);
+
+  const audioUrl = useMemo(() => {
+    if (!playbackState?.movie || trackInfo.audio.length === 0) return null;
+    return `/api/audio/${encodeURIComponent(playbackState.movie)}/${currentQuality}/${selectedAudio}`;
+  }, [playbackState?.movie, currentQuality, trackInfo, selectedAudio]);
+
   const myUserId = sessionData?.userId;
 
   const addToast = useCallback((message, type = 'info') => {
@@ -40,23 +95,22 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     }, 3000);
   }, []);
 
-  const handleReaction = useCallback(
-    (emoji) => {
-      emit('throw', { item: emoji });
-    },
-    [emit]
-  );
+  const handleThrow = useCallback((item) => {
+    emit('throw', { item });
+  }, [emit]);
+
+  const handleReaction = useCallback((emoji) => {
+    emit('reaction', { emoji });
+  }, [emit]);
 
   useEffect(() => {
-    if (!isHost || !videoRef.current) return;
-
+    if (!isHost) return;
     const syncInterval = setInterval(() => {
       if (isQualitySwitching.current) return;
       if (videoRef.current && playbackRef.current.isPlaying) {
         emit('host:sync', { position: videoRef.current.currentTime });
       }
     }, 2000);
-
     return () => clearInterval(syncInterval);
   }, [isHost, emit]);
 
@@ -65,169 +119,215 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     if (!video) return;
 
     const handleTimeUpdate = () => {
-      if (onTimeUpdate) {
-        onTimeUpdate(video.currentTime);
+      if (onTimeUpdate && video.duration > 0) {
+        onTimeUpdate(Math.round((video.currentTime / video.duration) * 1000) / 10);
       }
     };
-
+    const handleSeeked = () => {
+      lastSeekTime.current = Date.now();
+      if (onTimeUpdate && video.duration > 0) {
+        onTimeUpdate(Math.round((video.currentTime / video.duration) * 1000) / 10);
+      }
+    };
     const handleVideoError = () => {
       setVideoError(true);
       setTimeout(() => {
         if (videoRef.current && streamUrl) {
           videoRef.current.load();
-          if (playbackRef.current.isPlaying) {
-            videoRef.current.play().catch(() => {});
-          }
+          if (playbackRef.current.isPlaying) videoRef.current.play().catch(() => {});
         }
       }, 2000);
     };
-
     const handleEnded = () => {
-      if (isHost) {
-        emit('host:ended', {});
-      }
+      if (isHost) emit('host:ended', {});
       setMovieEnded(true);
     };
 
     video.addEventListener('timeupdate', handleTimeUpdate);
-    video.addEventListener('seeked', handleTimeUpdate);
+    video.addEventListener('seeked', handleSeeked);
     video.addEventListener('error', handleVideoError);
     video.addEventListener('ended', handleEnded);
 
-    const pollInterval = setInterval(() => {
-      if (video && !video.paused && onTimeUpdate) {
-        onTimeUpdate(video.currentTime);
+    const poll1 = setInterval(() => {
+      const v = videoRef.current;
+      const since = Date.now() - lastSeekTime.current;
+      if (since > 2000 && v && onTimeUpdate && v.duration > 0) {
+        onTimeUpdate(Math.round((v.currentTime / v.duration) * 1000) / 10);
       }
-    }, 250);
+    }, 200);
+
+    const poll2 = setInterval(() => {
+      const v = videoRef.current;
+      const since = Date.now() - lastSeekTime.current;
+      if (since < 2000 && v && onTimeUpdate && v.duration > 0) {
+        onTimeUpdate(Math.round((v.currentTime / v.duration) * 1000) / 10);
+      }
+    }, 100);
 
     return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate);
-      video.removeEventListener('seeked', handleTimeUpdate);
+      video.removeEventListener('seeked', handleSeeked);
       video.removeEventListener('error', handleVideoError);
       video.removeEventListener('ended', handleEnded);
-      clearInterval(pollInterval);
+      clearInterval(poll1);
+      clearInterval(poll2);
     };
   }, [onTimeUpdate, streamUrl, isHost, emit]);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const enumerateSubtitles = () => {
-      const tracks = [];
-      for (let i = 0; i < video.textTracks.length; i++) {
-        const tt = video.textTracks[i];
-        if (tt.kind === "subtitles" || tt.kind === "captions") {
-          tt.mode = "hidden";
-          tracks.push({ index: i, label: tt.label || tt.language || `Track ${i + 1}`, language: tt.language });
+    if (!playbackState?.movie) return;
+    fetch(`/api/movie/${encodeURIComponent(playbackState.movie)}/tracks`)
+      .then(r => r.json())
+      .then(data => {
+        setTrackInfo(data);
+        setSubtitleTracks((data.subs || []).map((s, i) => ({
+          index: s.index,
+          label: formatLabel(s.tags?.language, s.tags?.title),
+        })));
+        setAudioTracks((data.audio || []).map((a, i) => ({
+          index: a.index,
+          label: formatLabel(a.tags?.language, a.tags?.title),
+        })));
+        if (data.audio && data.audio.length > 0) {
+          setSelectedAudio(0);
         }
+      })
+      .catch(() => {});
+  }, [playbackState?.movie]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !audioUrl) return;
+
+    const onCanPlay = () => {
+      const video = videoRef.current;
+      if (video) {
+        audio.currentTime = video.currentTime;
+        if (!video.paused) audio.play().catch(() => {});
       }
-      setSubtitleTracks(tracks);
-      setSelectedSubtitle(-1);
+      audio.removeEventListener('canplay', onCanPlay);
     };
 
-    video.addEventListener("loadedmetadata", enumerateSubtitles);
-    return () => video.removeEventListener("loadedmetadata", enumerateSubtitles);
+    audio.addEventListener('canplay', onCanPlay);
+    audio.src = audioUrl;
+
+    return () => audio.removeEventListener('canplay', onCanPlay);
+  }, [audioUrl]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    const video = videoRef.current;
+    if (!audio || !video) return;
+
+    const audioSync = setInterval(() => {
+      if (!video.paused && !audio.paused) {
+        const diff = Math.abs(audio.currentTime - video.currentTime);
+        if (diff > 0.3) audio.currentTime = video.currentTime;
+      }
+    }, 250);
+
+    const onPlay = () => {
+      audio.currentTime = video.currentTime;
+      audio.play().catch(() => {});
+    };
+    const onPause = () => audio.pause();
+    const onSeeked = () => { audio.currentTime = video.currentTime; };
+
+    video.addEventListener('play', onPlay);
+    video.addEventListener('pause', onPause);
+    video.addEventListener('seeked', onSeeked);
+
+    return () => {
+      clearInterval(audioSync);
+      video.removeEventListener('play', onPlay);
+      video.removeEventListener('pause', onPause);
+      video.removeEventListener('seeked', onSeeked);
+    };
   }, [streamUrl]);
 
-  const handleSubtitleChange = useCallback((e) => {
-    const idx = parseInt(e.target.value);
-    setSelectedSubtitle(idx);
-    const video = videoRef.current;
-    if (!video) return;
-    for (let i = 0; i < video.textTracks.length; i++) {
-      video.textTracks[i].mode = i === idx ? "showing" : "hidden";
+  useEffect(() => {
+    if (selectedSubtitle < 0) {
+      setSubEntries([]);
+      setCurrentSubText('');
+      return;
     }
+    const track = trackInfo.subs[selectedSubtitle];
+    if (!track) return;
+
+    fetch(`/api/subs/${encodeURIComponent(playbackState.movie)}/${currentQuality}/${selectedSubtitle}`)
+      .then(r => r.text())
+      .then(text => setSubEntries(parseVtt(text)))
+      .catch(() => setSubEntries([]));
+  }, [selectedSubtitle, playbackState?.movie, currentQuality, trackInfo]);
+
+  useEffect(() => {
+    if (subIntervalRef.current) clearInterval(subIntervalRef.current);
+    if (subEntries.length === 0) { setCurrentSubText(''); return; }
+
+    subIntervalRef.current = setInterval(() => {
+      const video = videoRef.current;
+      if (!video) return;
+      const t = video.currentTime;
+      const entry = subEntries.find(e => t >= e.start && t <= e.end);
+      setCurrentSubText(entry ? entry.text : '');
+    }, 100);
+
+    return () => { if (subIntervalRef.current) clearInterval(subIntervalRef.current); };
+  }, [subEntries]);
+
+  const handleAudioChange = useCallback((e) => {
+    setSelectedAudio(parseInt(e.target.value));
+  }, []);
+
+  const handleSubtitleChange = useCallback((e) => {
+    setSelectedSubtitle(parseInt(e.target.value));
   }, []);
 
   const tryPlay = useCallback(() => {
     if (!videoRef.current) return;
     const video = videoRef.current;
-    const attempt = () => {
-      video.play().catch(() => {
-        video.muted = true;
-        video.play().catch(() => {});
-      });
-    };
     if (video.readyState >= 2) {
-      attempt();
+      video.play().catch(() => {});
     } else {
-      const onCanPlay = () => {
-        attempt();
-        video.oncanplay = null;
-      };
+      const onCanPlay = () => { video.play().catch(() => {}); video.oncanplay = null; };
       video.oncanplay = onCanPlay;
+    }
+    const audio = audioRef.current;
+    if (audio && audio.src) {
+      audio.currentTime = video.currentTime;
+      audio.play().catch(() => {});
     }
   }, []);
 
   useEffect(() => {
-    if (!streamUrl || !videoRef.current) return;
-
-    const video = videoRef.current;
-    const savedTime = video.currentTime;
-    const wasPlaying = !video.paused;
-
-    isQualitySwitching.current = true;
-    setVideoError(false);
-
-    const onCanPlay = () => {
-      video.currentTime = savedTime > 0 ? savedTime : playbackRef.current.currentTime;
-      if (wasPlaying || playbackRef.current.isPlaying) {
-        tryPlay();
-      }
-      isQualitySwitching.current = false;
-      setVideoError(false);
-      video.oncanplay = null;
-    };
-
-    video.oncanplay = onCanPlay;
-    video.src = streamUrl;
-  }, [streamUrl]);
-
-  useEffect(() => {
     if (!on) return;
-
     const unsubForce = on('forceQuality', (data) => {
       setCurrentQuality(data.quality);
       addToast && addToast(`Quality forced to ${data.quality}`, 'forced');
     });
-
     const unsubQualityChange = on('qualityChange', (data) => {
-      if (!isHost) {
-        setCurrentQuality(data.quality);
-      }
+      if (!isHost) setCurrentQuality(data.quality);
     });
-
-    return () => {
-      unsubForce?.();
-      unsubQualityChange?.();
-    };
+    return () => { unsubForce?.(); unsubQualityChange?.(); };
   }, [on, isHost, addToast]);
 
   useEffect(() => {
     const handlePlaybackUpdate = (state) => {
       setPlaybackState(state);
       playbackRef.current = { isPlaying: state.isPlaying, currentTime: state.currentTime };
-
       if (state.movie && movieEnded) setMovieEnded(false);
       if (state.isPlaying && videoError) setVideoError(false);
       if (!state.transcoding && videoError) setVideoError(false);
-
       if (isHost) return;
       if (isQualitySwitching.current) return;
 
-      if (videoRef.current && streamUrl && !state.transcoding) {
-        const video = videoRef.current;
+      const video = videoRef.current;
+      if (video && streamUrl && !state.transcoding) {
         const targetTime = state.currentTime;
         const diff = Math.abs(video.currentTime - targetTime);
-        if (diff > 4 && video.readyState >= 3) {
-          video.currentTime = targetTime;
-        }
-        if (state.isPlaying && video.paused && video.readyState >= 2) {
-          tryPlay();
-        } else if (!state.isPlaying && !video.paused) {
-          video.pause();
-        }
+        if (diff > 4 && video.readyState >= 3) video.currentTime = targetTime;
+        if (state.isPlaying && video.paused && video.readyState >= 2) tryPlay();
+        else if (!state.isPlaying && !video.paused) video.pause();
       }
     };
 
@@ -235,57 +335,34 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     const unsubThrow = on('throw', (data) => {
       setThrows((prev) => [...prev, { ...data, thrownAt: Date.now() }]);
     });
-
-    if (
-      !videoRef.current &&
-      playbackState.movie &&
-      playbackState.isPlaying &&
-      !playbackState.transcoding
-    ) {
-      initHls();
-    }
-
-    return () => {
-      unsubUpdate?.();
-      unsubThrow?.();
-    };
+    const unsubReaction = on('reaction', (data) => {
+      setReactions((prev) => [...prev, { ...data, receivedAt: Date.now(), posX: 25 + Math.random() * 50 }]);
+    });
+    return () => { unsubUpdate?.(); unsubThrow?.(); unsubReaction?.(); };
   }, [on, isHost, streamUrl, movieEnded, videoError]);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!videoRef.current || !playbackState.isPlaying) {
-        setBufferHealth(0);
-        return;
-      }
-
-      const buffered = videoRef.current.buffered;
+      const video = videoRef.current;
+      if (!video || !playbackState.isPlaying) { setBufferHealth(0); return; }
+      const buffered = video.buffered;
       let bufferEnd = 0;
       for (let i = 0; i < buffered.length; i++) {
-        if (buffered.start(i) <= videoRef.current.currentTime) {
-          bufferEnd = Math.max(bufferEnd, buffered.end(i));
-        }
+        if (buffered.start(i) <= video.currentTime) bufferEnd = Math.max(bufferEnd, buffered.end(i));
       }
-      const health = bufferEnd - videoRef.current.currentTime;
+      const health = bufferEnd - video.currentTime;
       setBufferHealth(health);
-
       if (!isHost && playbackState.movie) {
-        emit('viewer:health', { bufferHealth: health, drift: Math.abs(playbackState.currentTime - videoRef.current.currentTime), pingMs });
+        emit('viewer:health', { bufferHealth: health, drift: Math.abs(playbackState.currentTime - video.currentTime), pingMs });
       }
-
-      if (health > 0 && health < 5 && Math.abs(playbackState.currentTime - videoRef.current.currentTime) > 5) {
-        if (!showBanner) {
-          setShowBanner(true);
-        }
+      if (health > 0 && health < 5 && Math.abs(playbackState.currentTime - video.currentTime) > 5) {
+        if (!showBanner) setShowBanner(true);
       }
-
       if (health > 15 && showBanner) {
-        if (currentQuality !== '1080p' && !isHost) {
-          handleRaiseQuality();
-        }
+        if (currentQuality !== '1080p' && !isHost) handleRaiseQuality();
         setShowBanner(false);
       }
     }, 500);
-
     return () => clearInterval(interval);
   }, [playbackState.isPlaying, playbackState.currentTime, isHost, showBanner, currentQuality, pingMs]);
 
@@ -293,54 +370,32 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     const interval = setInterval(() => {
       const start = Date.now();
       emit('ping:measure', { timestamp: start }, (response) => {
-        if (response?.timestamp === start) {
-          setPingMs(Date.now() - start);
-        }
+        if (response?.timestamp === start) setPingMs(Date.now() - start);
       });
     }, 5000);
     return () => clearInterval(interval);
   }, [emit]);
 
   useEffect(() => {
-    if (seekRef) {
-      seekRef.current = (time) => {
-        if (videoRef.current) videoRef.current.currentTime = time;
-      };
-    }
-    if (playRef) {
-      playRef.current = () => {
-        if (videoRef.current) {
-          videoRef.current.muted = false;
-          videoRef.current.play().catch(() => {});
-        }
-      };
-    }
-    if (pauseRef) {
-      pauseRef.current = () => {
-        if (videoRef.current) videoRef.current.pause();
-      };
-    }
+    if (seekRef) seekRef.current = (time) => { if (videoRef.current) videoRef.current.currentTime = time; };
+    if (playRef) playRef.current = () => { if (videoRef.current) videoRef.current.play().catch(() => {}); };
+    if (pauseRef) pauseRef.current = () => { if (videoRef.current) videoRef.current.pause(); };
   }, [seekRef, playRef, pauseRef]);
 
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.muted = isMuted;
-    }
-  }, [isMuted]);
+    const audio = audioRef.current;
+    if (audio) audio.volume = isMuted ? 0 : volume;
+  }, [isMuted, volume]);
 
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.volume = volume;
-    }
-  }, [volume]);
+    if (videoRef.current) videoRef.current.volume = 0;
+  }, [streamUrl]);
 
   useEffect(() => {
     const timers = {};
     throws.forEach(t => {
       if (!splattering[t.id]) {
-        timers[t.id] = setTimeout(() => {
-          setSplattering(prev => ({ ...prev, [t.id]: true }));
-        }, 1300);
+        timers[t.id] = setTimeout(() => setSplattering(prev => ({ ...prev, [t.id]: true })), 1300);
       }
     });
     return () => Object.values(timers).forEach(clearTimeout);
@@ -351,31 +406,33 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     if (ids.length > 0) {
       const timer = setTimeout(() => {
         setThrows(prev => prev.filter(t => !ids.includes(t.id)));
-        setSplattering(prev => {
-          const next = { ...prev };
-          ids.forEach(id => delete next[id]);
-          return next;
-        });
+        setSplattering(prev => { const next = { ...prev }; ids.forEach(id => delete next[id]); return next; });
       }, 500);
       return () => clearTimeout(timer);
     }
   }, [splattering]);
 
+  useEffect(() => {
+    if (reactions.length === 0) return;
+    const timer = setTimeout(() => {
+      setReactions(prev => prev.filter(r => Date.now() - r.receivedAt < 900));
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [reactions]);
+
   const handleLowerQuality = useCallback(() => {
     const idx = QUALITY_PRESETS.indexOf(currentQuality);
     if (idx < QUALITY_PRESETS.length - 1) {
-      const newQuality = QUALITY_PRESETS[idx + 1];
-      setCurrentQuality(newQuality);
-      addToast(`Auto-switched to ${newQuality}`, 'info');
+      setCurrentQuality(QUALITY_PRESETS[idx + 1]);
+      addToast(`Auto-switched to ${QUALITY_PRESETS[idx + 1]}`, 'info');
     }
   }, [currentQuality, addToast]);
 
   const handleRaiseQuality = useCallback(() => {
     const idx = QUALITY_PRESETS.indexOf(currentQuality);
     if (idx > 0) {
-      const newQuality = QUALITY_PRESETS[idx - 1];
-      setCurrentQuality(newQuality);
-      addToast(`Quality restored to ${newQuality}`, 'success');
+      setCurrentQuality(QUALITY_PRESETS[idx - 1]);
+      addToast(`Quality restored to ${QUALITY_PRESETS[idx - 1]}`, 'success');
     }
   }, [currentQuality, addToast]);
 
@@ -383,11 +440,8 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     if (quality !== currentQuality) {
       setCurrentQuality(quality);
       setShowBanner(false);
-      if (isHost) {
-        emit('host:qualityChange', { quality });
-      } else {
-        addToast(`Switched to ${quality}`, 'info');
-      }
+      if (isHost) emit('host:qualityChange', { quality });
+      else addToast(`Switched to ${quality}`, 'info');
     }
   }, [currentQuality, isHost, emit, addToast]);
 
@@ -410,15 +464,12 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
             <h2>Preparing movie...</h2>
             <div className="transcode-progress">
               <div className="progress-bar">
-                <div
-                  className="progress-fill"
-                  style={{ width: `${playbackState.transcodeProgress}%` }}
-                />
+                <div className="progress-fill" style={{ width: `${playbackState.transcodeProgress}%` }} />
               </div>
               <p>{playbackState.transcodeProgress}% — Please wait</p>
+            </div>
           </div>
         </div>
-      </div>
       )}
 
       {movieEnded && playbackState.movie && (
@@ -466,29 +517,30 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
         {throws.map((t) => {
           const isThrower = t.throwerId === myUserId;
           const isSplatter = splattering[t.id];
-          const animClass = isThrower
-            ? 'throw-firstperson'
-            : t.throwerSide === 'left' ? 'throw-from-left' : 'throw-from-right';
+          const animClass = isThrower ? 'throw-firstperson' : t.throwerSide === 'left' ? 'throw-from-left' : 'throw-from-right';
           const style = isThrower
-            ? {
-                '--throw-x': `${46 + Math.random() * 8}%`,
-                '--throw-y': `${55 + Math.random() * 25}%`,
-              }
-            : {
-                '--throw-start-y': `${5 + Math.random() * 20}%`,
-                '--throw-end-x': t.throwerSide === 'left' ? `${40 + Math.random() * 15}%` : `${45 + Math.random() * 15}%`,
-                '--throw-end-y': `${30 + Math.random() * 30}%`,
-              };
+            ? { '--throw-x': `${46 + Math.random() * 8}%`, '--throw-y': `${55 + Math.random() * 25}%` }
+            : { '--throw-start-y': `${5 + Math.random() * 20}%`, '--throw-end-x': t.throwerSide === 'left' ? `${40 + Math.random() * 15}%` : `${45 + Math.random() * 15}%`, '--throw-end-y': `${30 + Math.random() * 30}%` };
           return (
             <div key={t.id} className={`throw-item ${animClass} ${isSplatter ? 'splatter' : ''}`} style={style}>
-              {isSplatter
-                ? (t.item === 'tomato' ? '🔴' : '💛')
-                : (t.item === 'tomato' ? '🍅' : '🍿')}
+              {isSplatter ? (t.item === 'tomato' ? '🔴' : '💛') : (t.item === 'tomato' ? '🍅' : '🍿')}
               {!isSplatter && <span className="throw-name">{t.name}</span>}
             </div>
           );
         })}
+        {reactions.map((r) => (
+          <div key={r.id} className="reaction-float" style={{ left: `${r.posX}%` }}>
+            {r.emoji}
+            <span className="reaction-name">{r.name}</span>
+          </div>
+        ))}
       </div>
+
+      {currentSubText && (
+        <div className="subtitle-overlay">
+          <span>{currentSubText}</span>
+        </div>
+      )}
 
       <style>{`
         video::-webkit-media-controls { display: none !important; }
@@ -502,48 +554,40 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
         controls={false}
         disablePictureInPicture
         onDoubleClick={() => {
-          if (document.fullscreenElement) {
-            document.exitFullscreen();
-          } else {
-            videoRef.current?.requestFullscreen();
-          }
+          if (document.fullscreenElement) document.exitFullscreen();
+          else videoRef.current?.requestFullscreen();
         }}
       />
-      <div className="player-controls">
-        <select
-          className="quality-selector"
-          value={currentQuality}
-          onChange={(e) => handleManualQualityChange(e.target.value)}
-        >
+      <audio ref={audioRef} preload="auto" playsInline style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px' }} />
+      <div className="player-controls-left">
+        <select className="audio-selector" value={selectedAudio} onChange={handleAudioChange} title="Audio Track">
+          {audioTracks.length > 0
+            ? audioTracks.map((t, i) => (
+                <option key={i} value={i}>{t.label}</option>
+              ))
+            : <option value={0}>Audio: Default</option>}
+        </select>
+        <select className="subtitle-selector" value={selectedSubtitle} onChange={handleSubtitleChange} title="Subtitles">
+          <option value={-1}>Subs: Off</option>
+          {subtitleTracks.map((t, i) => (
+            <option key={i} value={i}>{t.label}</option>
+          ))}
+        </select>
+      </div>
+      <div className="player-controls-right">
+        <select className="quality-selector" value={currentQuality} onChange={(e) => handleManualQualityChange(e.target.value)}>
           {QUALITY_PRESETS.map(q => (
             <option key={q} value={q}>{q}</option>
           ))}
         </select>
-        {subtitleTracks.length > 0 && (
-          <select
-            className="subtitle-selector"
-            value={selectedSubtitle}
-            onChange={handleSubtitleChange}
-            title="Subtitles"
-          >
-            <option value={-1}>Subs: Off</option>
-            {subtitleTracks.map(t => (
-              <option key={t.index} value={t.index}>{t.label}</option>
-            ))}
-          </select>
-        )}
         <div className="volume-control">
           <button className="mute-btn" onClick={() => setIsMuted(m => !m)} title={isMuted ? 'Unmute' : 'Mute'}>
             {isMuted ? '🔇' : volume > 0.5 ? '🔊' : volume > 0 ? '🔉' : '🔈'}
           </button>
-          <input
-            type="range" min="0" max="1" step="0.05" value={volume}
-            onChange={(e) => setVolume(parseFloat(e.target.value))}
-            className="volume-slider"
-          />
+          <input type="range" min="0" max="1" step="0.05" value={volume} onChange={(e) => setVolume(parseFloat(e.target.value))} className="volume-slider" />
         </div>
       </div>
-      <ThrowButton onThrow={handleReaction} on={on} reactionsEnabled={reactionsEnabled} />
+      <ThrowButton onThrow={handleThrow} onReaction={handleReaction} on={on} reactionsEnabled={reactionsEnabled} />
     </div>
   );
 }

@@ -2,6 +2,14 @@
 # Start Movie Stream server + ngrok tunnel for remote watch party
 # Usage: ./twp-party
 
+if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+  echo "Usage: twp-party"
+  echo "  Start the Tomato Watch Party server with an ngrok tunnel."
+  echo "  Installs dependencies if missing, starts ngrok, and shows a shareable URL."
+  echo "  Requires ngrok: https://ngrok.com/download"
+  exit 0
+fi
+
 cd "$(dirname "$0")"
 
 # Check dependencies

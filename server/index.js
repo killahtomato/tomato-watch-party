@@ -7,9 +7,13 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { setupSocketHandlers } from './socketHandlers.js';
 import { authenticateHost } from './auth.js';
-import { getMovieList, getStreamDir, getStreamPath, initCache } from './streamManager.js';
-import { existsSync } from 'fs';
+import { getMovieList, getMovieDir, getStreamDir, getStreamPath, initCache, remuxForTracks, STREAM_DIR } from './streamManager.js';
+import { existsSync, mkdirSync } from 'fs';
 import { logger } from './logger.js';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: join(__dirname, '..', '.env') });
@@ -59,10 +63,102 @@ app.post('/api/host/login', (req, res) => {
   }
 });
 
-await initCache();
-setupSocketHandlers(io);
+  await initCache();
+  setupSocketHandlers(io);
 
-const PORT = process.env.PORT || 3000;
-httpServer.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT}`);
-});
+  app.get('/api/movie/:name/tracks', async (req, res) => {
+    const movieName = decodeURIComponent(req.params.name);
+    const movieDir = getMovieDir();
+    const moviePath = join(movieDir, movieName);
+    if (!existsSync(moviePath)) return res.status(404).json({ error: 'Not found' });
+
+    try {
+      const { stdout } = await execAsync(
+        `ffprobe -v error -show_entries stream=index,codec_type,codec_name:stream_tags=language,title -of json "${moviePath}"`
+      );
+      const data = JSON.parse(stdout);
+      const audio = (data.streams || []).filter(s => s.codec_type === 'audio');
+      const subs = (data.streams || []).filter(s => s.codec_type === 'subtitle');
+      res.json({ audio, subs });
+    } catch (err) {
+      logger.error(`Track probe failed for ${moviePath}: ${err.message}`);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/api/stream-file/:movie/:quality', async (req, res) => {
+    const movieName = decodeURIComponent(req.params.movie);
+    const quality = req.params.quality || '1080p';
+    const audioIdx = parseInt(req.query.audio) || 0;
+    const subIdx = req.query.sub !== undefined ? parseInt(req.query.sub) : -1;
+
+    try {
+      const filePath = await remuxForTracks(movieName, quality, audioIdx, subIdx);
+      res.sendFile(filePath);
+    } catch (err) {
+      logger.error(`Remux failed: ${err.message}`);
+      const fallback = getStreamPath(movieName, quality);
+      if (existsSync(fallback)) {
+        res.sendFile(fallback);
+      } else {
+        res.status(500).json({ error: err.message });
+      }
+    }
+  });
+
+  const PORT = process.env.PORT || 3000;
+  httpServer.listen(PORT, () => {
+    logger.info(`Server running on port ${PORT}`);
+  });
+
+  const AUDIO_EXTRACT_DIR = join(STREAM_DIR, '_audio');
+  const SUB_EXTRACT_DIR = join(STREAM_DIR, '_subs');
+
+  app.get('/api/audio/:movie/:quality/:index', async (req, res) => {
+    const movieName = decodeURIComponent(req.params.movie);
+    const quality = req.params.quality;
+    const index = parseInt(req.params.index);
+
+    const outDir = join(AUDIO_EXTRACT_DIR, movieName, quality);
+    const outPath = join(outDir, `track_${index}.m4a`);
+
+    if (!existsSync(outPath)) {
+      mkdirSync(outDir, { recursive: true });
+      const src = getStreamPath(movieName, quality);
+      try {
+        await execAsync(
+          `ffmpeg -y -i "${src}" -map 0:a:${index} -c:a copy "${outPath}"`
+        );
+      } catch (err) {
+        logger.error(`Audio extract failed: ${err.message}`);
+        return res.status(500).json({ error: err.message });
+      }
+    }
+
+    res.sendFile(outPath);
+  });
+
+  app.get('/api/subs/:movie/:quality/:index', async (req, res) => {
+    const movieName = decodeURIComponent(req.params.movie);
+    const quality = req.params.quality;
+    const index = parseInt(req.params.index);
+
+    const outDir = join(SUB_EXTRACT_DIR, movieName, quality);
+    const outPath = join(outDir, `track_${index}.vtt`);
+
+    if (!existsSync(outPath)) {
+      mkdirSync(outDir, { recursive: true });
+      const src = getStreamPath(movieName, quality);
+      try {
+        await execAsync(
+          `ffmpeg -y -i "${src}" -map 0:s:${index} "${outPath}"`
+        );
+      } catch (err) {
+        logger.error(`Sub extract failed: ${err.message}`);
+        return res.status(500).json({ error: err.message });
+      }
+    }
+
+    res.type('text/vtt');
+    res.sendFile(outPath);
+  });
