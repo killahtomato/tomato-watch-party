@@ -43,7 +43,7 @@ function formatLabel(lang, title) {
   return langName;
 }
 
-export default function VideoPlayer({ userName, isHost, emit, on, sessionData, onTimeUpdate, seekRef, playRef, pauseRef }) {
+export default function VideoPlayer({ userName, isHost, emit, on, sessionData, onTimeUpdate, seekRef, playRef, pauseRef, isActive = true }) {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
   const playbackRef = useRef({ isPlaying: false, currentTime: 0 });
@@ -81,9 +81,9 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
   }, [playbackState.movie, playbackState.transcoding, currentQuality]);
 
   const audioUrl = useMemo(() => {
-    if (!playbackState?.movie || trackInfo.audio.length === 0) return null;
+    if (!playbackState?.movie || playbackState.transcoding || trackInfo.audio.length === 0) return null;
     return `/api/audio/${encodeURIComponent(playbackState.movie)}/${currentQuality}/${selectedAudio}`;
-  }, [playbackState?.movie, currentQuality, trackInfo, selectedAudio]);
+  }, [playbackState?.movie, playbackState.transcoding, currentQuality, trackInfo, selectedAudio]);
 
   const myUserId = sessionData?.userId;
 
@@ -325,7 +325,8 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
       if (video && streamUrl && !state.transcoding) {
         const targetTime = state.currentTime;
         const diff = Math.abs(video.currentTime - targetTime);
-        if (diff > 4 && video.readyState >= 3) video.currentTime = targetTime;
+        const threshold = state.forceResync ? 0.1 : 4;
+        if (diff > threshold && video.readyState >= 3) video.currentTime = targetTime;
         if (state.isPlaying && video.paused && video.readyState >= 2) tryPlay();
         else if (!state.isPlaying && !video.paused) video.pause();
       }
@@ -386,6 +387,21 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     const audio = audioRef.current;
     if (audio) audio.volume = isMuted ? 0 : volume;
   }, [isMuted, volume]);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.muted = !isActive;
+    }
+    if (isActive && playbackState.isPlaying) {
+      const video = videoRef.current;
+      if (video && video.paused) {
+        video.play().catch(() => {});
+      }
+      if (audioRef.current && audioRef.current.paused && audioRef.current.src) {
+        audioRef.current.play().catch(() => {});
+      }
+    }
+  }, [isActive, playbackState.isPlaying]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.volume = 0;
@@ -553,6 +569,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
         playsInline
         controls={false}
         disablePictureInPicture
+        muted
         onDoubleClick={() => {
           if (document.fullscreenElement) document.exitFullscreen();
           else videoRef.current?.requestFullscreen();

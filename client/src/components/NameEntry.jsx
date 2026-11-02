@@ -48,7 +48,7 @@ export default function NameEntry({ onSubmit, connected, joining, error, onError
   return (
     <div className="name-entry">
       <div className="name-entry-box">
-        <h1>Movie Stream</h1>
+        <h1>🍅Tomato Watch Party🍅</h1>
         <p className="subtitle">Join the audience</p>
 
         {!connected && <p className="conn-status offline">Connecting to server...</p>}

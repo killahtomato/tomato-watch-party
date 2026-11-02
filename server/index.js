@@ -8,7 +8,8 @@ import { dirname, join } from 'path';
 import { setupSocketHandlers } from './socketHandlers.js';
 import { authenticateHost } from './auth.js';
 import { getMovieList, getMovieDir, getStreamDir, getStreamPath, initCache, remuxForTracks, STREAM_DIR } from './streamManager.js';
-import { existsSync, mkdirSync } from 'fs';
+import { getAudioFileList } from './djManager.js';
+import { existsSync, mkdirSync, readFileSync } from 'fs';
 import { logger } from './logger.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -61,6 +62,28 @@ app.post('/api/host/login', (req, res) => {
   } else {
     res.status(401).json({ error: 'Invalid password' });
   }
+});
+
+app.post('/api/dj/login', (req, res) => {
+  const { password } = req.body;
+  if (password === process.env.HOST_PASSWORD) {
+    const token = authenticateHost({ room: 'dj' });
+    res.json({ token });
+  } else {
+    res.status(401).json({ error: 'Invalid password' });
+  }
+});
+
+app.get('/api/audio-files', async (req, res) => {
+  const tracks = await getAudioFileList();
+  res.json(tracks);
+});
+
+app.get('/api/audio-file/:track', (req, res) => {
+  const trackName = decodeURIComponent(req.params.track);
+  const trackPath = join(getMovieDir(), trackName);
+  if (!existsSync(trackPath)) return res.status(404).json({ error: 'Not found' });
+  res.sendFile(trackPath);
 });
 
   await initCache();
@@ -125,7 +148,24 @@ app.post('/api/host/login', (req, res) => {
     if (!existsSync(outPath)) {
       mkdirSync(outDir, { recursive: true });
       const src = getStreamPath(movieName, quality);
+
+      const waitForFile = async (path, timeout = 1800000) => {
+        const start = Date.now();
+        const metaPath = path + '.meta.json';
+        while (true) {
+          if (existsSync(path) && existsSync(metaPath)) {
+            try {
+              const meta = JSON.parse(readFileSync(metaPath, 'utf8'));
+              if (meta.complete) return;
+            } catch {}
+          }
+          if (Date.now() - start > timeout) throw new Error('Timeout waiting for transcoded file');
+          await new Promise(r => setTimeout(r, 500));
+        }
+      };
+
       try {
+        await waitForFile(src);
         await execAsync(
           `ffmpeg -y -i "${src}" -map 0:a:${index} -c:a copy "${outPath}"`
         );
@@ -149,7 +189,24 @@ app.post('/api/host/login', (req, res) => {
     if (!existsSync(outPath)) {
       mkdirSync(outDir, { recursive: true });
       const src = getStreamPath(movieName, quality);
+
+      const waitForFile = async (path, timeout = 1800000) => {
+        const start = Date.now();
+        const metaPath = path + '.meta.json';
+        while (true) {
+          if (existsSync(path) && existsSync(metaPath)) {
+            try {
+              const meta = JSON.parse(readFileSync(metaPath, 'utf8'));
+              if (meta.complete) return;
+            } catch {}
+          }
+          if (Date.now() - start > timeout) throw new Error('Timeout waiting for transcoded file');
+          await new Promise(r => setTimeout(r, 500));
+        }
+      };
+
       try {
+        await waitForFile(src);
         await execAsync(
           `ffmpeg -y -i "${src}" -map 0:s:${index} "${outPath}"`
         );

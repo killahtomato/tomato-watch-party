@@ -4,10 +4,14 @@ import NameEntry from './components/NameEntry.jsx';
 import VideoPlayer from './components/VideoPlayer.jsx';
 import Chat from './components/Chat.jsx';
 import HostControls from './components/HostControls.jsx';
+import DJRoom from './components/DJRoom.jsx';
+import RoomSwitcher from './components/RoomSwitcher.jsx';
 
 export default function App() {
   const [userName, setUserName] = useState(null);
   const [isHost, setIsHost] = useState(false);
+  const [isDJ, setIsDJ] = useState(false);
+  const [currentRoom, setCurrentRoom] = useState('movie');
   const [viewerCount, setViewerCount] = useState(0);
   const [sessionData, setSessionData] = useState(null);
   const [joining, setJoining] = useState(false);
@@ -38,12 +42,24 @@ export default function App() {
       });
     }
 
+    const djToken = sessionStorage.getItem('djToken');
+    if (djToken) {
+      emit('host:authenticate', { token: djToken, room: 'dj' }, (response) => {
+        if (response?.success) {
+          setIsDJ(true);
+        } else {
+          sessionStorage.removeItem('djToken');
+        }
+      });
+    }
+
     const unsubJoined = on('joined', (data) => {
       setSessionData(data);
       setViewerCount(data.viewerCount);
       setUserName(pendingNameRef.current);
       setJoining(false);
       setJoinError(null);
+      if (data.room) setCurrentRoom(data.room);
     });
 
     const unsubViewerCount = on('viewerCount', (count) => {
@@ -52,7 +68,9 @@ export default function App() {
 
     const unsubRevoked = on('host:revoked', () => {
       setIsHost(false);
+      setIsDJ(false);
       sessionStorage.removeItem('hostToken');
+      sessionStorage.removeItem('djToken');
     });
 
     const unsubJoinError = on('join:error', (data) => {
@@ -89,6 +107,12 @@ export default function App() {
     [emit, joining]
   );
 
+  const handleRoomSwitch = useCallback((room) => {
+    if (room === currentRoom) return;
+    setCurrentRoom(room);
+    emit('join', { name: pendingNameRef.current, room });
+  }, [currentRoom, emit]);
+
   const handleHostLogin = useCallback(
     (token) => {
       sessionStorage.setItem('hostToken', token);
@@ -98,6 +122,21 @@ export default function App() {
         } else {
           sessionStorage.removeItem('hostToken');
           alert('Invalid host token');
+        }
+      });
+    },
+    [emit]
+  );
+
+  const handleDJLogin = useCallback(
+    (token) => {
+      sessionStorage.setItem('djToken', token);
+      emit('host:authenticate', { token, room: 'dj' }, (response) => {
+        if (response?.success) {
+          setIsDJ(true);
+        } else {
+          sessionStorage.removeItem('djToken');
+          alert('Invalid DJ token');
         }
       });
     },
@@ -145,39 +184,60 @@ export default function App() {
 
   return (
     <div className="app">
+      <RoomSwitcher currentRoom={currentRoom} onSwitch={handleRoomSwitch} />
+
       <div className="main-area">
-        <VideoPlayer
-          userName={userName}
-          isHost={isHost}
-          emit={emit}
-          on={on}
-          sessionData={sessionData}
-          onTimeUpdate={setPlaybackPercent}
-          seekRef={seekRef}
-          playRef={playRef}
-          pauseRef={pauseRef}
-        />
-        {isHost && (
-          <HostControls
+        <div className={`room-pane movie-pane ${currentRoom === 'movie' ? 'active' : 'inactive'}`}>
+          <VideoPlayer
+            userName={userName}
+            isHost={isHost}
             emit={emit}
             on={on}
-            playbackPercent={playbackPercent}
+            sessionData={sessionData}
+            onTimeUpdate={setPlaybackPercent}
             seekRef={seekRef}
             playRef={playRef}
             pauseRef={pauseRef}
-            onSeekPercent={handleSeekPercent}
+            isActive={currentRoom === 'movie'}
           />
-        )}
+          {isHost && (
+            <HostControls
+              emit={emit}
+              on={on}
+              playbackPercent={playbackPercent}
+              seekRef={seekRef}
+              playRef={playRef}
+              pauseRef={pauseRef}
+              onSeekPercent={handleSeekPercent}
+            />
+          )}
+        </div>
+        <div className={`room-pane dj-pane ${currentRoom === 'dj' ? 'active' : 'inactive'}`}>
+          <DJRoom
+            emit={emit}
+            on={on}
+            sessionData={sessionData}
+            isDJ={isDJ}
+            onDJLogin={handleDJLogin}
+            isActive={currentRoom === 'dj'}
+          />
+        </div>
       </div>
 
       <div className="sidebar">
-        {sessionData?.playbackState?.movie && (
+        {currentRoom === 'movie' && sessionData?.playbackState?.movie && (
           <div className="now-playing-banner">
             <strong>{sessionData.playbackState.movie.replace(/\.[^.]+$/, '')}</strong>
           </div>
         )}
+        {currentRoom === 'dj' && (
+          <div className="now-playing-banner">
+            <strong>🎵 DJ Room</strong>
+          </div>
+        )}
         <Chat userName={userName} emit={emit} on={on} sessionData={sessionData} />
-        {!isHost && (
+
+        {currentRoom === 'movie' && !isHost && (
           <button
             className="host-login-btn"
             onClick={() => {
@@ -196,6 +256,28 @@ export default function App() {
             }}
           >
             Host Login
+          </button>
+        )}
+
+        {currentRoom === 'dj' && !isDJ && (
+          <button
+            className="host-login-btn"
+            onClick={() => {
+              const password = prompt('Enter DJ password:');
+              if (!password) return;
+              fetch('/api/dj/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password }),
+              })
+                .then((r) => r.json())
+                .then((data) => {
+                  if (data.token) handleDJLogin(data.token);
+                  else alert('Login failed');
+                });
+            }}
+          >
+            DJ Login
           </button>
         )}
       </div>
@@ -220,7 +302,7 @@ export default function App() {
                 {v.pingMs > 0 && <span className="viewer-ping">{v.pingMs}ms</span>}
                 <span className="viewer-name">{v.name}</span>
                 {v.isHost && <span className="viewer-host-icon">👑</span>}
-                {isHost && (
+                {isHost && currentRoom === 'movie' && (
                   <div className="viewer-force-quality">
                     <button
                       className="force-quality-btn"
@@ -240,7 +322,6 @@ export default function App() {
                           onClick={(e) => {
                             e.stopPropagation();
                             handleForceQuality(v.id, q);
-                            v.forceQuality = q;
                             e.target.closest('.force-quality-popup').classList.remove('open');
                           }}
                         >

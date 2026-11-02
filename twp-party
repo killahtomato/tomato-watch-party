@@ -1,12 +1,12 @@
 #!/bin/bash
-# Start Movie Stream server + ngrok tunnel for remote watch party
+# Start Tomato Watch Party server + Cloudflare Tunnel
 # Usage: ./twp-party
 
 if [[ "$1" == "--help" || "$1" == "-h" ]]; then
-  echo "Usage: twp-party"
-  echo "  Start the Tomato Watch Party server with an ngrok tunnel."
-  echo "  Installs dependencies if missing, starts ngrok, and shows a shareable URL."
-  echo "  Requires ngrok: https://ngrok.com/download"
+  echo "Usage: ./twp-party"
+  echo "  Start the Tomato Watch Party server with a Cloudflare Tunnel."
+  echo "  Installs dependencies if missing, starts cloudflared, and shows a shareable URL."
+  echo "  Requires cloudflared: sudo pacman -S cloudflared"
   exit 0
 fi
 
@@ -23,49 +23,51 @@ if [ ! -d "client/node_modules" ]; then
   cd client && npm install && npm run build && cd ..
 fi
 
-# Check ngrok
-if ! command -v ngrok &>/dev/null; then
-  echo "ngrok not found. Install from https://ngrok.com/download"
+# Check cloudflared
+if ! command -v cloudflared &>/dev/null; then
+  echo "cloudflared not found. Install from https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/"
   exit 1
 fi
 
-# Kill any existing processes on port 3000
-lsof -ti:3000 2>/dev/null | xargs kill -9 2>/dev/null
+# Kill any existing processes
+./twp-kill 2>/dev/null
 
 echo ""
 echo "========================================"
-echo "  Starting Movie Stream Party Server"
+echo "  Starting Tomato Watch Party"
 echo "========================================"
 echo ""
 
-# Start ngrok in background
-ngrok http 3000 > /tmp/ngrok.log 2>&1 &
-NGROK_PID=$!
-echo "ngrok starting (PID: $NGROK_PID)..."
+# Start the server in background
+setsid node server/index.js > server.log 2>&1 < /dev/null &
+echo "Server starting on http://localhost:3000..."
 
-# Wait for ngrok to get a URL
+# Wait for server
 sleep 3
 
-# Get the public URL
-NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o '"public_url":"[^"]*"' | head -1 | cut -d'"' -f4)
+# Start cloudflared in background
+nohup cloudflared tunnel --url http://localhost:3000 > cloudflared.log 2>&1 &
+echo "Cloudflare Tunnel starting..."
 
-if [ -n "$NGROK_URL" ]; then
+# Wait for tunnel URL
+sleep 5
+TUNNEL_URL=$(grep -o 'https://[^ ]*trycloudflare.com' cloudflared.log | head -1)
+
+if [ -n "$TUNNEL_URL" ]; then
   echo ""
-  echo "  Share this URL with your friend:"
-  echo "  ➜  $NGROK_URL"
+  echo "  Share this URL with your friends:"
+  echo "  ➜  $TUNNEL_URL"
   echo ""
   echo "  (Local: http://localhost:3000)"
   echo ""
 else
-  echo "  ngrok starting... check http://localhost:4040 for the URL"
+  echo "  Tunnel starting... check cloudflared.log for the URL"
   echo ""
 fi
 
-echo "Press Ctrl+C to stop both server and tunnel."
+echo "Press Ctrl+C to stop server and tunnel."
 echo ""
 
-# Start the server in foreground
-cd server && node index.js
-
-# Cleanup ngrok on exit
-kill $NGROK_PID 2>/dev/null
+# Wait for interrupt
+trap 'echo "Stopping..."; ./twp-kill 2>/dev/null; exit 0' INT TERM
+while true; do sleep 1; done

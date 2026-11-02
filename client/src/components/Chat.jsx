@@ -32,9 +32,14 @@ export default function Chat({ userName, emit, on, sessionData }) {
       }, 3500);
     });
 
+    const unsubJoined = on('joined', (data) => {
+      setMessages(data.chatHistory || []);
+    });
+
     return () => {
       unsubMsg?.();
       unsubSys?.();
+      unsubJoined?.();
     };
   }, [on]);
 

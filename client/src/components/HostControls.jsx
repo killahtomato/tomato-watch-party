@@ -20,12 +20,26 @@ export default function HostControls({ emit, on, playbackPercent, seekRef, playR
     const unsubJoined = on('joined', (data) => {
       if (data.playbackState) setPlaybackState(data.playbackState);
     });
+    const unsubMovies = on('movies:updated', setMovies);
 
     return () => {
       unsub?.();
       unsubJoined?.();
+      unsubMovies?.();
     };
   }, [on]);
+
+  const handleRefreshMovies = useCallback(() => {
+    emit('host:refreshMovies', {}, (res) => {
+      if (res?.success) {
+        fetch('/api/movies').then(r => r.json()).then(setMovies);
+      }
+    });
+  }, [emit]);
+
+  const handleResync = useCallback(() => {
+    emit('host:resync', {});
+  }, [emit]);
 
   const handlePlayMovie = (movieName) => {
     setMoviesPanelOpen(false);
@@ -146,6 +160,7 @@ export default function HostControls({ emit, on, playbackPercent, seekRef, playR
                 {playbackPercent > 0 ? '▶ Resume' : '▶ Play'}
               </button>
             )}
+            <button onClick={handleResync} title="Force audience to resync">🔄 Resync</button>
           </>
         )}
         <label className="reactions-toggle">
@@ -183,7 +198,10 @@ export default function HostControls({ emit, on, playbackPercent, seekRef, playR
       <div className={`movie-panel${moviesPanelOpen ? ' open' : ''}`}>
         <div className="movie-panel-header">
           <h4>Select Movie</h4>
-          <button className="movie-panel-close" onClick={() => setMoviesPanelOpen(false)}>✕</button>
+          <div className="movie-panel-actions">
+            <button className="movie-panel-refresh" onClick={handleRefreshMovies} title="Refresh movie list">🔄</button>
+            <button className="movie-panel-close" onClick={() => setMoviesPanelOpen(false)}>✕</button>
+          </div>
         </div>
         <div className="movie-panel-list">
           {movies.length === 0 && <p>No movies found in folder.</p>}
