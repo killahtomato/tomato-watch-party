@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import AudioVisualizer from './AudioVisualizer.jsx';
 
-export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActive = true }) {
+export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActive = true, seekRef, playRef, pauseRef, onSeekPercent, onPercentUpdate, playbackPercent = 0 }) {
   const audioRef = useRef(null);
   const playbackRef = useRef({ isPlaying: false, currentTime: 0 });
+  const wasPlayingBeforeSeekRef = useRef(false);
+  const resumeAfterSeekRef = useRef(false);
+  const seekResumeTimeoutRef = useRef(null);
+  const seekInProgressRef = useRef(false);
   const lastSeekTime = useRef(0);
+  const initializedTrackRef = useRef(null);
   const [tracks, setTracks] = useState([]);
   const [playbackState, setPlaybackState] = useState({ track: null, isPlaying: false, currentTime: 0 });
+  const [dragTime, setDragTime] = useState(null);
   const [reactions, setReactions] = useState([]);
   const [reactionsEnabled, setReactionsEnabled] = useState(true);
   const [trackListOpen, setTrackListOpen] = useState(false);
@@ -24,9 +30,18 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
   }, []);
 
   useEffect(() => {
+    if (seekRef) seekRef.current = (time) => { if (audioRef.current) audioRef.current.currentTime = time; };
+    if (playRef) playRef.current = () => { if (audioRef.current) audioRef.current.play().catch(() => {}); };
+    if (pauseRef) pauseRef.current = () => { if (audioRef.current) audioRef.current.pause(); };
+  }, [seekRef, playRef, pauseRef]);
+
+  useEffect(() => {
     if (!audioRef.current || !trackUrl) return;
 
     const onCanPlay = () => {
+      if (initializedTrackRef.current === trackUrl) return;
+      initializedTrackRef.current = trackUrl;
+
       const saved = playbackRef.current.currentTime;
       if (saved > 0) audioRef.current.currentTime = saved;
       if (playbackRef.current.isPlaying) {
@@ -46,32 +61,67 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
 
     const handleTimeUpdate = () => {
       playbackRef.current.currentTime = audio.currentTime;
+      if (audio.duration > 0) {
+        onPercentUpdate?.(Math.round((audio.currentTime / audio.duration) * 1000) / 10);
+      }
     };
-    const handleEnded = () => {
-      if (isDJ) emit('dj:ended', {});
+    const handleSeeked = () => {
+      lastSeekTime.current = Date.now();
+      if (resumeAfterSeekRef.current) {
+        resumeAfterSeekRef.current = false;
+        clearTimeout(seekResumeTimeoutRef.current);
+        playbackRef.current.isPlaying = true;
+        emit('dj:resume', {});
+        audio.play().catch((error) => console.error('[DJ] Resume after seek failed:', error));
+      }
+      if (audio.duration > 0) {
+        onPercentUpdate?.(Math.round((audio.currentTime / audio.duration) * 1000) / 10);
+      }
     };
-    const handlePlay = () => { playbackRef.current.isPlaying = true; };
-    const handlePause = () => { playbackRef.current.isPlaying = false; };
+  const handleEnded = () => {
+    if (!isDJ) return;
+    const currentIndex = tracks.findIndex(t => t.name === playbackState.track);
+    const nextIndex = (currentIndex + 1) % tracks.length;
+    const nextTrack = tracks[nextIndex];
+    if (nextTrack) {
+      emit('dj:play', { track: nextTrack.name }, () => {
+        emit('dj:resume', {});
+      });
+    }
+  };
+  const handlePlay = () => { playbackRef.current.isPlaying = true; };
+  const handlePause = () => { playbackRef.current.isPlaying = false; };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('seeked', handleSeeked);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('pause', handlePause);
 
-    const poll = setInterval(() => {
-      if (audio.duration > 0) {
-        playbackRef.current.currentTime = audio.currentTime;
+    const poll1 = setInterval(() => {
+      const since = Date.now() - lastSeekTime.current;
+      if (since > 2000 && audio.duration > 0) {
+        onPercentUpdate?.(Math.round((audio.currentTime / audio.duration) * 1000) / 10);
       }
-    }, 250);
+    }, 200);
+
+    const poll2 = setInterval(() => {
+      const since = Date.now() - lastSeekTime.current;
+      if (since < 2000 && audio.duration > 0) {
+        onPercentUpdate?.(Math.round((audio.currentTime / audio.duration) * 1000) / 10);
+      }
+    }, 100);
 
     return () => {
       audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('seeked', handleSeeked);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);
-      clearInterval(poll);
+      clearInterval(poll1);
+      clearInterval(poll2);
     };
-  }, [isDJ, emit]);
+  }, [isDJ, emit, onPercentUpdate]);
 
   useEffect(() => {
     if (!isDJ) return;
@@ -88,6 +138,8 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
       playbackRef.current = { isPlaying: state.isPlaying, currentTime: state.currentTime };
       setPlaybackState(state);
 
+      // The DJ host owns the audio element. Don't repeatedly call play() from
+      // periodic server updates while the browser is still completing a seek.
       if (isDJ) return;
       const audio = audioRef.current;
       if (!audio || !state.track) return;
@@ -160,12 +212,65 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
     emit('dj:seek', { time });
   }, [emit]);
 
+  const currentTrack = tracks.find(t => t.name === playbackState.track);
+  const duration = currentTrack?.duration || 0;
+
+  const handleSeekChange = useCallback((e) => {
+    const pct = parseFloat(e.target.value);
+    setDragTime(pct);
+  }, []);
+
+  const handleSeekStart = useCallback(() => {
+    if (seekInProgressRef.current) return;
+    seekInProgressRef.current = true;
+    // Capture this before changing currentTime: a media seek can fire a pause
+    // event, which otherwise makes the release handler think playback was paused.
+    wasPlayingBeforeSeekRef.current = !!audioRef.current && !audioRef.current.paused;
+    resumeAfterSeekRef.current = false;
+    clearTimeout(seekResumeTimeoutRef.current);
+    setDragTime(playbackPercent);
+    if (wasPlayingBeforeSeekRef.current) {
+      audioRef.current.pause();
+      playbackRef.current.isPlaying = false;
+      emit('dj:pause', {});
+    }
+  }, [emit, playbackPercent]);
+
+  const handleSeekEnd = useCallback((e) => {
+    const pct = parseFloat(e.target.value);
+    setDragTime(null);
+    if (!seekInProgressRef.current) handleSeekStart();
+    seekInProgressRef.current = false;
+    if (duration <= 0) return;
+
+    const time = (pct / 100) * duration;
+    const audio = audioRef.current;
+    resumeAfterSeekRef.current = wasPlayingBeforeSeekRef.current;
+    if (audio) {
+      audio.currentTime = time;
+      playbackRef.current.currentTime = time;
+    }
+    emit('dj:seek', { time });
+    onSeekPercent?.(pct);
+
+    if (wasPlayingBeforeSeekRef.current && audio) {
+      playbackRef.current.isPlaying = true;
+      // Some browsers report seeking=false before dispatching `seeked`; the
+      // timeout is a fallback for that case and is cleared by the event.
+      seekResumeTimeoutRef.current = setTimeout(() => {
+        if (!resumeAfterSeekRef.current) return;
+        resumeAfterSeekRef.current = false;
+        playbackRef.current.isPlaying = true;
+        emit('dj:resume', {});
+        audio.play().catch((error) => console.error('[DJ] Resume after seek failed:', error));
+      }, 1000);
+    }
+    wasPlayingBeforeSeekRef.current = false;
+  }, [duration, emit, handleSeekStart, onSeekPercent]);
+
   const handleReaction = useCallback((emoji) => {
     emit('dj:reaction', { emoji });
   }, [emit]);
-
-  const currentTrack = tracks.find(t => t.name === playbackState.track);
-  const duration = currentTrack?.duration || 0;
 
   return (
     <div className="dj-room">
@@ -196,6 +301,28 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
             ) : (
               <button onClick={handleResume}>▶ Play</button>
             )}
+          </div>
+        )}
+
+        {isDJ && playbackState.track && duration > 0 && (
+          <div className="dj-seek-bar">
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={0.1}
+              value={dragTime !== null ? dragTime : Math.min(playbackPercent, 100)}
+              onPointerDown={handleSeekStart}
+              onKeyDown={handleSeekStart}
+              onChange={handleSeekChange}
+              onPointerUp={handleSeekEnd}
+              onPointerCancel={handleSeekEnd}
+              onKeyUp={handleSeekEnd}
+            />
+            <div className="dj-seek-labels">
+              <span>{formatTime((playbackPercent / 100) * duration)}</span>
+              <span>{formatTime(duration)}</span>
+            </div>
           </div>
         )}
 

@@ -33,7 +33,19 @@ export default function Chat({ userName, emit, on, sessionData }) {
     });
 
     const unsubJoined = on('joined', (data) => {
-      setMessages(data.chatHistory || []);
+      const history = data.chatHistory || [];
+      const now = Date.now();
+      history.forEach(msg => {
+        if (msg.type === 'system') {
+          const age = now - msg.timestamp;
+          if (age < 3500) {
+            setTimeout(() => {
+              setMessages(prev => prev.filter(m => m.id !== msg.id));
+            }, 3500 - age);
+          }
+        }
+      });
+      setMessages(history.filter(msg => msg.type !== 'system' || (now - msg.timestamp) < 3500));
     });
 
     return () => {
@@ -67,8 +79,10 @@ export default function Chat({ userName, emit, on, sessionData }) {
   };
 
   const getSystemIcon = (text) => {
-    if (text.includes('joined')) return '🎬';
-    if (text.includes('left')) return '👋';
+    if (text.includes('DJ') && text.includes('joined')) return '\u{1FAA9}';
+    if (text.includes('DJ') && text.includes('left')) return '\u{1F44B}';
+    if (text.includes('joined')) return '\u{1F3AC}';
+    if (text.includes('left')) return '\u{1F44B}';
     return '';
   };
 

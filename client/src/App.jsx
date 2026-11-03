@@ -25,6 +25,10 @@ export default function App() {
   const seekRef = useRef(null);
   const playRef = useRef(null);
   const pauseRef = useRef(null);
+  const djSeekRef = useRef(null);
+  const djPlayRef = useRef(null);
+  const djPauseRef = useRef(null);
+  const [djPlaybackPercent, setDJPlaybackPercent] = useState(0);
 
   const handleSeekPercent = useCallback((pct) => {
     setPlaybackPercent(pct);
@@ -220,6 +224,12 @@ export default function App() {
             isDJ={isDJ}
             onDJLogin={handleDJLogin}
             isActive={currentRoom === 'dj'}
+            seekRef={djSeekRef}
+            playRef={djPlayRef}
+            pauseRef={djPauseRef}
+            onSeekPercent={setDJPlaybackPercent}
+            onPercentUpdate={setDJPlaybackPercent}
+            playbackPercent={djPlaybackPercent}
           />
         </div>
       </div>
