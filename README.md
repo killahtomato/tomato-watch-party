@@ -43,7 +43,7 @@ docker-compose up -d
 ```
 
 ## Remote Access
-Use ngrok for remote friends:
+Use cloudflare for remote friends:
 ```bash
 ./twp-party
 ```
