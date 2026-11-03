@@ -17,6 +17,11 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
   const [reactionsEnabled, setReactionsEnabled] = useState(true);
   const [trackListOpen, setTrackListOpen] = useState(false);
 
+  const tracksRef = useRef(tracks);
+  tracksRef.current = tracks;
+  const currentTrackRef = useRef(playbackState.track);
+  currentTrackRef.current = playbackState.track;
+
   const trackUrl = playbackState.track
     ? `/api/audio-file/${encodeURIComponent(playbackState.track)}`
     : null;
@@ -80,9 +85,9 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
     };
   const handleEnded = () => {
     if (!isDJ) return;
-    const currentIndex = tracks.findIndex(t => t.name === playbackState.track);
-    const nextIndex = (currentIndex + 1) % tracks.length;
-    const nextTrack = tracks[nextIndex];
+    const currentIndex = tracksRef.current.findIndex(t => t.name === currentTrackRef.current);
+    const nextIndex = (currentIndex + 1) % tracksRef.current.length;
+    const nextTrack = tracksRef.current[nextIndex];
     if (nextTrack) {
       emit('dj:play', { track: nextTrack.name }, () => {
         emit('dj:resume', {});

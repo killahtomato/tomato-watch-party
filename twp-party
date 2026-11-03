@@ -1,13 +1,18 @@
 #!/bin/bash
 # Start Tomato Watch Party server + Cloudflare Tunnel
-# Usage: ./twp-party
+# Usage: ./twp-party [--background]
 
 if [[ "$1" == "--help" || "$1" == "-h" ]]; then
-  echo "Usage: ./twp-party"
+  echo "Usage: ./twp-party [--background]"
   echo "  Start the Tomato Watch Party server with a Cloudflare Tunnel."
-  echo "  Installs dependencies if missing, starts cloudflared, and shows a shareable URL."
+  echo "  --background: daemonize and exit immediately"
   echo "  Requires cloudflared: sudo pacman -S cloudflared"
   exit 0
+fi
+
+BACKGROUND=false
+if [[ "$1" == "--background" || "$1" == "-b" ]]; then
+  BACKGROUND=true
 fi
 
 cd "$(dirname "$0")"
@@ -31,12 +36,6 @@ fi
 
 # Kill any existing processes
 ./twp-kill 2>/dev/null
-
-echo ""
-echo "========================================"
-echo "  Starting Tomato Watch Party"
-echo "========================================"
-echo ""
 
 # Start the server in background
 setsid node server/index.js > server.log 2>&1 < /dev/null &
@@ -63,6 +62,11 @@ if [ -n "$TUNNEL_URL" ]; then
 else
   echo "  Tunnel starting... check cloudflared.log for the URL"
   echo ""
+fi
+
+if [ "$BACKGROUND" = true ]; then
+  echo "Running in background. Use ./twp-kill to stop."
+  exit 0
 fi
 
 echo "Press Ctrl+C to stop server and tunnel."
