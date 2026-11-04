@@ -2,12 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 process.env.JWT_SECRET = 'test-jwt-secret-not-default';
 process.env.HOST_PASSWORD = 'test-host-password';
 process.env.MOVIE_DIR = '/tmp/opencode/test-movies';
 process.env.STREAM_DIR = '/tmp/opencode/test-streams';
-process.env.LOG_FILE = '/tmp/opencode/test-server.log';
+process.env.LOG_FILE = join(tmpdir(), 'twp-test-server.log');
 
 const auth = await import('../auth.js');
 const sm = await import('../streamManager.js');
