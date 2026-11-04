@@ -1,8 +1,8 @@
-import { exec, spawn } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
-import { mkdirSync, existsSync, unlinkSync, copyFileSync, readFileSync, writeFileSync, rmSync } from 'fs';
+import { mkdirSync, existsSync, copyFileSync, readFileSync, writeFileSync } from 'fs';
 import { readdir, stat } from 'fs/promises';
-import { join, dirname } from 'path';
+import { join, dirname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { logger } from './logger.js';
@@ -10,7 +10,7 @@ import { logger } from './logger.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: join(__dirname, '..', '.env') });
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const MOVIE_DIR = process.env.MOVIE_DIR || './movies';
 const STREAM_DIR = process.env.STREAM_DIR || './streams';
@@ -41,6 +41,33 @@ const QUALITY_PRESETS = [
   { quality: '480p', width: 854, height: 480, bitrate: '2M' },
 ];
 
+const QUALITY_SET = new Set(QUALITY_PRESETS.map(q => q.quality));
+
+export function isValidQuality(quality) {
+  return typeof quality === 'string' && QUALITY_SET.has(quality);
+}
+
+export function isSafeName(name) {
+  return (
+    typeof name === 'string' &&
+    name.length > 0 &&
+    name !== '.' &&
+    name !== '..' &&
+    !name.includes('/') &&
+    !name.includes('\\') &&
+    !name.includes('\0')
+  );
+}
+
+export function safeJoin(base, ...parts) {
+  const resolved = resolve(base, ...parts);
+  const baseResolved = resolve(base);
+  if (resolved !== baseResolved && !resolved.startsWith(baseResolved + sep)) {
+    throw new Error('Path traversal detected');
+  }
+  return resolved;
+}
+
 let ioRef = null;
 let config = { showForceQualityToast: true, showAutoRaiseToast: true };
 let syncInterval = null;
@@ -67,16 +94,16 @@ function stopSyncBroadcast() {
 
 async function loadConfig() {
   try {
-    const { stdout } = await execAsync('cat /home/tomato/Work/movie-stream/config.json 2>/dev/null || echo "{}"');
-    const parsed = JSON.parse(stdout);
-    config = { ...config, ...parsed };
+    const raw = readFileSync(join(__dirname, '..', 'config.json'), 'utf8');
+    config = { ...config, ...JSON.parse(raw) };
   } catch {}
 }
 
 async function testEncoder(encoder) {
   try {
-    await execAsync(
-      `ffmpeg -hide_banner -f lavfi -i testsrc=duration=1:size=320x240:rate=10 -c:v ${encoder} -f null - 2>&1`,
+    await execFileAsync(
+      'ffmpeg',
+      ['-hide_banner', '-f', 'lavfi', '-i', 'testsrc=duration=1:size=320x240:rate=10', '-c:v', encoder, '-f', 'null', '-'],
       { timeout: 10000 }
     );
     return true;
@@ -99,7 +126,7 @@ async function detectEncoder() {
   }
 
   try {
-    const { stdout } = await execAsync('ffmpeg -hide_banner -encoders 2>/dev/null');
+    const { stdout } = await execFileAsync('ffmpeg', ['-hide_banner', '-encoders']);
     const available = stdout;
 
     const candidates = [
@@ -130,11 +157,13 @@ export async function isBrowserCompatible(moviePath) {
   const ext = moviePath.slice(moviePath.lastIndexOf('.')).toLowerCase();
   if (ext !== '.mp4' && ext !== '.m4v') return false;
   try {
-    const { stdout: v } = await execAsync(
-      `ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 "${moviePath}"`
+    const { stdout: v } = await execFileAsync(
+      'ffprobe',
+      ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=codec_name', '-of', 'csv=p=0', moviePath]
     );
-    const { stdout: a } = await execAsync(
-      `ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 "${moviePath}"`
+    const { stdout: a } = await execFileAsync(
+      'ffprobe',
+      ['-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_name', '-of', 'csv=p=0', moviePath]
     );
     return v.trim() === 'h264' && a.trim() === 'aac';
   } catch {
@@ -156,8 +185,9 @@ function getMeta(streamPath) {
 
 async function probeDuration(moviePath) {
   try {
-    const { stdout } = await execAsync(
-      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${moviePath}"`
+    const { stdout } = await execFileAsync(
+      'ffprobe',
+      ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', moviePath]
     );
     return parseFloat(stdout.trim());
   } catch {
@@ -180,12 +210,15 @@ function isCacheValid(streamPath, sourceStat) {
 }
 
 export function getStreamPath(movieName, quality) {
-  return join(STREAM_DIR, movieName, quality + '.mp4');
+  if (!isSafeName(movieName)) throw new Error('Invalid movie name');
+  if (!isValidQuality(quality)) throw new Error('Invalid quality');
+  return safeJoin(STREAM_DIR, movieName, quality + '.mp4');
 }
 
 export function getStreamDir(movieName) {
   if (movieName) {
-    const dir = join(STREAM_DIR, movieName);
+    if (!isSafeName(movieName)) throw new Error('Invalid movie name');
+    const dir = safeJoin(STREAM_DIR, movieName);
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
     }
@@ -197,7 +230,10 @@ export function getStreamDir(movieName) {
 const REMUX_DIR = join(STREAM_DIR, '_remux');
 
 export function getRemuxPath(movieName, quality, audioIdx, subIdx) {
-  return join(REMUX_DIR, movieName, quality, `a${audioIdx}_s${subIdx}.mp4`);
+  if (!isSafeName(movieName)) throw new Error('Invalid movie name');
+  if (!isValidQuality(quality)) throw new Error('Invalid quality');
+  if (!Number.isInteger(audioIdx) || !Number.isInteger(subIdx)) throw new Error('Invalid track index');
+  return safeJoin(REMUX_DIR, movieName, quality, `a${audioIdx}_s${subIdx}.mp4`);
 }
 
 export async function remuxForTracks(movieName, quality, audioIdx, subIdx) {
@@ -221,10 +257,7 @@ export async function remuxForTracks(movieName, quality, audioIdx, subIdx) {
     '-y', remuxPath
   );
 
-  const { exec } = await import('child_process');
-  const { promisify } = await import('util');
-  const execAsync = promisify(exec);
-  await execAsync(`ffmpeg ${args.join(' ')}`);
+  await execFileAsync('ffmpeg', args);
   return remuxPath;
 }
 
@@ -319,8 +352,9 @@ export async function getMovieList() {
 
       let duration = null;
       try {
-        const { stdout } = await execAsync(
-          `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`
+        const { stdout } = await execFileAsync(
+          'ffprobe',
+          ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', filePath]
         );
         duration = Math.round(parseFloat(stdout.trim()));
       } catch {}
@@ -376,6 +410,8 @@ export function getCurrentMovie() {
 }
 
 export async function playMovie(movieName, quality) {
+  if (!isSafeName(movieName)) throw new Error('Invalid movie name');
+  if (!isValidQuality(quality || DEFAULT_QUALITY)) throw new Error('Invalid quality');
   const moviePath = join(MOVIE_DIR, movieName);
   if (!existsSync(moviePath)) {
     throw new Error('Movie not found');

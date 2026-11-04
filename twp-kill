@@ -1,0 +1,16 @@
+#!/bin/bash
+if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+  echo "Usage: twp-kill"
+  echo "  Stop all Tomato Watch Party processes:"
+  echo "  - node server (server/index.js)"
+  echo "  - ffmpeg transcoding jobs"
+  echo "  - SSH tunnels on port 3000"
+  echo "  - cloudflared tunnels"
+  exit 0
+fi
+pkill -9 -f "node.*server/index.js" 2>/dev/null
+pkill -9 -f "node.*movie-stream" 2>/dev/null
+pkill -9 -f "ffmpeg" 2>/dev/null
+pkill -9 -f "ssh.*-L.*3000" 2>/dev/null
+pkill -9 -f cloudflared 2>/dev/null
+echo "twp-kill: stopped"

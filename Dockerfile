@@ -8,6 +8,8 @@ COPY package.json package-lock.json* ./
 RUN npm install --production
 
 COPY server/ ./server/
+RUN cd server && npm install --production
+
 COPY client/ ./client/
 RUN cd client && npm install && npm run build
 

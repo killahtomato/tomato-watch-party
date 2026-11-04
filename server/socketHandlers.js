@@ -11,6 +11,7 @@ import {
   isStreamActive,
   getCurrentMovie,
   getMovieList,
+  isValidQuality,
 } from './streamManager.js';
 import {
   getPlaybackState as getDJState,
@@ -99,7 +100,7 @@ export function setupSocketHandlers(io) {
 
     socket.on('join', (data) => {
       const room = data?.room === 'dj' ? 'dj' : 'movie';
-      const name = (data?.name || 'Anonymous').slice(0, 24).trim();
+      const name = String(data?.name || 'Anonymous').slice(0, 24).trim();
       const finalName = name || 'Anonymous';
 
       const oldRoom = socket.data.room;
@@ -238,10 +239,14 @@ export function setupSocketHandlers(io) {
       const user = state.users.get(socket.id);
       if (!user) return;
 
+      const emoji = typeof data?.emoji === 'string' && data.emoji.length > 0
+        ? data.emoji.slice(0, 32)
+        : '\u{1F44F}';
+
       broadcastToRoom(io, room, 'reaction', {
         id: Date.now() + '-' + socket.id,
         name: user.name,
-        emoji: data.emoji || '\u{1F44F}',
+        emoji,
         throwerId: socket.id,
         throwerSide: user.side,
       });
@@ -255,10 +260,14 @@ export function setupSocketHandlers(io) {
       const user = state.users.get(socket.id);
       if (!user) return;
 
+      const emoji = typeof data?.emoji === 'string' && data.emoji.length > 0
+        ? data.emoji.slice(0, 32)
+        : '\u{1F37E}';
+
       broadcastToRoom(io, room, 'dj:reaction', {
         id: Date.now() + '-' + socket.id,
         name: user.name,
-        emoji: data.emoji || '\u{1F37E}',
+        emoji,
         throwerId: socket.id,
         throwerSide: user.side,
       });
@@ -270,9 +279,9 @@ export function setupSocketHandlers(io) {
 
     socket.on('viewer:health', (data) => {
       viewerHealth.set(socket.id, {
-        bufferHealth: data?.bufferHealth || 0,
-        drift: data?.drift || 0,
-        pingMs: data?.pingMs || 0,
+        bufferHealth: Number.isFinite(data?.bufferHealth) ? data.bufferHealth : 0,
+        drift: Number.isFinite(data?.drift) ? data.drift : 0,
+        pingMs: Number.isFinite(data?.pingMs) ? data.pingMs : 0,
         updatedAt: Date.now(),
       });
     });
@@ -294,6 +303,9 @@ export function setupSocketHandlers(io) {
     socket.on('host:playMovie', async (data, callback) => {
       if (!isHostSocket(socket) || getRoom(socket) !== 'movie') {
         return callback?.({ error: 'Unauthorized' });
+      }
+      if (typeof data?.movie !== 'string' || data.movie.length === 0) {
+        return callback?.({ error: 'Invalid movie' });
       }
       try {
         const state = await playMovie(data.movie, data.quality);
@@ -321,6 +333,9 @@ export function setupSocketHandlers(io) {
 
     socket.on('host:seek', (data, callback) => {
       if (!isHostSocket(socket) || getRoom(socket) !== 'movie') return callback?.({ error: 'Unauthorized' });
+      if (typeof data?.time !== 'number' || !Number.isFinite(data.time) || data.time < 0) {
+        return callback?.({ error: 'Invalid time' });
+      }
       seekPlayback(data.time);
       const now = Date.now();
       if (now - lastSeekBroadcast > 500) {
@@ -340,7 +355,11 @@ export function setupSocketHandlers(io) {
 
     socket.on('host:forceQuality', (data, callback) => {
       if (!isHostSocket(socket) || getRoom(socket) !== 'movie') return callback?.({ error: 'Unauthorized' });
-      const quality = data.quality || '1080p';
+      const quality = data?.quality;
+      if (!isValidQuality(quality)) return callback?.({ error: 'Invalid quality' });
+      if (data.targetUserId !== undefined && typeof data.targetUserId !== 'string') {
+        return callback?.({ error: 'Invalid target' });
+      }
       if (data.targetUserId) {
         io.to(data.targetUserId).emit('forceQuality', { quality });
       } else {
@@ -351,11 +370,15 @@ export function setupSocketHandlers(io) {
 
     socket.on('host:qualityChange', (data) => {
       if (!isHostSocket(socket) || getRoom(socket) !== 'movie') return;
+      if (!isValidQuality(data?.quality)) return;
       broadcastToRoom(io, 'movie', 'qualityChange', { quality: data.quality });
     });
 
     socket.on('dj:play', async (data, callback) => {
       if (!isDJHostSocket(socket)) return callback?.({ error: 'Unauthorized' });
+      if (typeof data?.track !== 'string' || data.track.length === 0) {
+        return callback?.({ error: 'Invalid track' });
+      }
       try {
         const state = await playTrack(data.track);
         logger.info(`DJ playing: ${data.track}`);
@@ -383,6 +406,9 @@ export function setupSocketHandlers(io) {
 
     socket.on('dj:seek', (data, callback) => {
       if (!isDJHostSocket(socket)) return callback?.({ error: 'Unauthorized' });
+      if (typeof data?.time !== 'number' || !Number.isFinite(data.time) || data.time < 0) {
+        return callback?.({ error: 'Invalid time' });
+      }
       djSeek(data.time);
       broadcastToRoom(io, 'dj', 'dj:playbackUpdate', getDJState());
       callback?.({ success: true, state: getDJState() });
@@ -420,7 +446,7 @@ export function setupSocketHandlers(io) {
           callback?.({ error: 'Invalid token' });
         }
       } else {
-        if (verifyHostToken(data.token)) {
+        if (verifyHostToken(data.token, 'movie')) {
           const state = getRoomState(room);
           if (state.hostSocketId && state.hostSocketId !== socket.id) {
             io.to(state.hostSocketId).emit('host:revoked');
@@ -472,7 +498,7 @@ export function setupSocketHandlers(io) {
       if (!isHostSocket(socket)) return callback?.({ error: 'Unauthorized' });
       const room = getRoom(socket);
       const state = getRoomState(room);
-      state.reactionsEnabled = data.enabled !== false;
+      state.reactionsEnabled = data?.enabled !== false;
       broadcastToRoom(io, room, 'reactions:enabled', state.reactionsEnabled);
       callback?.({ success: true, enabled: state.reactionsEnabled });
     });

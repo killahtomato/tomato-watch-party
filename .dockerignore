@@ -1,0 +1,13 @@
+node_modules
+server/node_modules
+client/node_modules
+client/dist
+movies
+streams
+hls
+.env
+*.log
+*.tar.gz
+.git
+.idea
+.vscode

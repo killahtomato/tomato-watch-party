@@ -1,11 +1,11 @@
 import { readdir, stat } from 'fs/promises';
 import { join } from 'path';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { getMovieDir } from './streamManager.js';
+import { getMovieDir, isSafeName, safeJoin } from './streamManager.js';
 import { logger } from './logger.js';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const AUDIO_EXTENSIONS = ['.mp3', '.flac', '.wav', '.ogg', '.m4a', '.aac', '.wma', '.opus'];
 
@@ -32,8 +32,9 @@ export async function getAudioFileList() {
 
       let duration = null;
       try {
-        const { stdout } = await execAsync(
-          `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`
+        const { stdout } = await execFileAsync(
+          'ffprobe',
+          ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', filePath]
         );
         duration = Math.round(parseFloat(stdout.trim()));
       } catch {}
@@ -58,8 +59,8 @@ export function getPlaylist() {
 }
 
 export async function playTrack(trackName) {
-  const movieDir = getMovieDir();
-  const filePath = join(movieDir, trackName);
+  if (!isSafeName(trackName)) throw new Error('Invalid track name');
+  const filePath = safeJoin(getMovieDir(), trackName);
   try {
     await stat(filePath);
   } catch {

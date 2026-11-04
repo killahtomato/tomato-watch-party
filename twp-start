@@ -1,0 +1,30 @@
+#!/bin/bash
+if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+  echo "Usage: twp-start [--background]"
+  echo "  Start the Tomato Watch Party server on http://localhost:3000"
+  echo "  --background: daemonize and exit immediately"
+  echo "  Kills any existing server process first, then launches detached."
+  exit 0
+fi
+
+BACKGROUND=false
+if [[ "$1" == "--background" || "$1" == "-b" ]]; then
+  BACKGROUND=true
+fi
+
+cd "$(dirname "$0")"
+pkill -9 -f "node.*server/index.js" 2>/dev/null
+sleep 1
+setsid node server/index.js > server.log 2>&1 < /dev/null &
+
+if [ "$BACKGROUND" = true ]; then
+  echo "twp-start: server launched in background"
+  exit 0
+fi
+
+sleep 3
+if lsof -ti:3000 > /dev/null 2>&1; then
+  echo "twp-start: running on http://localhost:3000"
+else
+  echo "twp-start: failed to start"
+fi

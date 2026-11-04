@@ -13,10 +13,10 @@ import { getMovieDir, getStreamDirBase } from "./server/streamManager.js";
 import { stat } from "fs/promises";
 import { join } from "path";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "fs";
-import { exec, spawn } from "child_process";
+import { execFile, spawn } from "child_process";
 import { promisify } from "util";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const QUALITIES = ["1080p", "720p", "480p"];
 const IMAGE_SUB_CODECS = new Set(["pgssub", "dvd_subtitle", "vobsub", "dvb_subtitle", "hdmv_pgs_subtitle"]);
 
@@ -68,8 +68,9 @@ function pacmanBar(progress, width = 30) {
 
 async function probeDuration(filePath) {
   try {
-    const { stdout } = await execAsync(
-      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`
+    const { stdout } = await execFileAsync(
+      "ffprobe",
+      ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", filePath]
     );
     return parseFloat(stdout.trim());
   } catch {
@@ -79,8 +80,9 @@ async function probeDuration(filePath) {
 
 async function probeSubtitleCodecs(filePath) {
   try {
-    const { stdout } = await execAsync(
-      `ffprobe -v error -select_streams s -show_entries stream=codec_name -of csv=p=0 "${filePath}"`
+    const { stdout } = await execFileAsync(
+      "ffprobe",
+      ["-v", "error", "-select_streams", "s", "-show_entries", "stream=codec_name", "-of", "csv=p=0", filePath]
     );
     return stdout.trim().split("\n").filter(Boolean);
   } catch {
@@ -90,8 +92,9 @@ async function probeSubtitleCodecs(filePath) {
 
 async function probeAudioCodecs(filePath) {
   try {
-    const { stdout } = await execAsync(
-      `ffprobe -v error -select_streams a -show_entries stream=codec_name:stream_tags=language -of csv=p=0 "${filePath}"`
+    const { stdout } = await execFileAsync(
+      "ffprobe",
+      ["-v", "error", "-select_streams", "a", "-show_entries", "stream=codec_name:stream_tags=language", "-of", "csv=p=0", filePath]
     );
     return stdout.trim().split("\n").filter(Boolean);
   } catch {
