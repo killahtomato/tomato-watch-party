@@ -13,6 +13,7 @@ dotenv.config({ path: join(__dirname, '..', '.env') });
 const execFileAsync = promisify(execFile);
 
 const MOVIE_DIR = process.env.MOVIE_DIR || './movies';
+const MUSIC_DIR = process.env.MUSIC_DIR || './music';
 const STREAM_DIR = process.env.STREAM_DIR || './streams';
 
 export { STREAM_DIR };
@@ -332,6 +333,10 @@ export function updateHostPosition(position) {
 
 export function getMovieDir() {
   return MOVIE_DIR;
+}
+
+export function getMusicDir() {
+  return MUSIC_DIR;
 }
 
 export function getStreamDirBase() {

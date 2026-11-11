@@ -1,8 +1,9 @@
 import { readdir, stat } from 'fs/promises';
+import { mkdirSync } from 'fs';
 import { join } from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { getMovieDir, isSafeName, safeJoin } from './streamManager.js';
+import { getMusicDir, isSafeName, safeJoin } from './streamManager.js';
 import { logger } from './logger.js';
 
 const execFileAsync = promisify(execFile);
@@ -19,15 +20,16 @@ let playlist = [];
 
 export async function getAudioFileList() {
   try {
-    const movieDir = getMovieDir();
-    const files = await readdir(movieDir);
+    const musicDir = getMusicDir();
+    mkdirSync(musicDir, { recursive: true });
+    const files = await readdir(musicDir);
     const tracks = [];
 
     for (const file of files) {
       const ext = file.lastIndexOf('.') > 0 ? file.slice(file.lastIndexOf('.')).toLowerCase() : '';
       if (!AUDIO_EXTENSIONS.includes(ext)) continue;
 
-      const filePath = join(movieDir, file);
+      const filePath = join(musicDir, file);
       const fileStat = await stat(filePath);
 
       let duration = null;
@@ -60,7 +62,7 @@ export function getPlaylist() {
 
 export async function playTrack(trackName) {
   if (!isSafeName(trackName)) throw new Error('Invalid track name');
-  const filePath = safeJoin(getMovieDir(), trackName);
+  const filePath = safeJoin(getMusicDir(), trackName);
   try {
     await stat(filePath);
   } catch {

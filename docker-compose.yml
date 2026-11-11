@@ -5,12 +5,14 @@ services:
       - "${PORT:-3000}:3000"
     volumes:
       - ${MOVIE_DIR:-./movies}:/app/server/movies:ro
+      - ${MUSIC_DIR:-./music}:/app/server/music:ro
       - stream-data:/app/server/streams
     environment:
       - HOST_PASSWORD=${HOST_PASSWORD:?HOST_PASSWORD must be set}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
       - PORT=3000
       - MOVIE_DIR=/app/server/movies
+      - MUSIC_DIR=/app/server/music
       - STREAM_DIR=/app/server/streams
       - NODE_ENV=production
       - DEBUG=${DEBUG:-0}

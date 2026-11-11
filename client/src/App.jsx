@@ -6,6 +6,7 @@ import Chat from './components/Chat.jsx';
 import HostControls from './components/HostControls.jsx';
 import DJRoom from './components/DJRoom.jsx';
 import RoomSwitcher from './components/RoomSwitcher.jsx';
+import { applyOrder } from './utils/order.js';
 
 export default function App() {
   const [userName, setUserName] = useState(null);
@@ -29,6 +30,7 @@ export default function App() {
   const djPlayRef = useRef(null);
   const djPauseRef = useRef(null);
   const [djPlaybackPercent, setDJPlaybackPercent] = useState(0);
+  const [movies, setMovies] = useState([]);
 
   const handleSeekPercent = useCallback((pct) => {
     setPlaybackPercent(pct);
@@ -158,6 +160,37 @@ export default function App() {
     [emit]
   );
 
+  const loadMovies = useCallback(async () => {
+    const [list, orderData] = await Promise.all([
+      fetch('/api/movies').then(r => r.json()).catch(() => []),
+      fetch('/api/order/movie').then(r => r.json()).catch(() => ({ order: [] })),
+    ]);
+    const movieList = Array.isArray(list) ? list : [];
+    const savedOrder = Array.isArray(orderData?.order) ? orderData.order : [];
+    setMovies(applyOrder(movieList, savedOrder));
+  }, []);
+
+  const handleReorderMovies = useCallback((nextMovies) => {
+    setMovies(nextMovies);
+    emit('movie:setOrder', { order: nextMovies.map(m => m.name) }, (res) => {
+      if (res?.error) console.error(res.error);
+    });
+  }, [emit]);
+
+  useEffect(() => {
+    loadMovies();
+    const unsubUpdated = on('movies:updated', loadMovies);
+    const unsubOrder = on('orderUpdate', (data) => {
+      if (data?.room === 'movie') {
+        setMovies(prev => applyOrder(prev, Array.isArray(data.order) ? data.order : []));
+      }
+    });
+    return () => {
+      unsubUpdated?.();
+      unsubOrder?.();
+    };
+  }, [loadMovies, on]);
+
   const getSignalBars = (pingMs) => {
     if (pingMs <= 0) return '░░░░';
     if (pingMs < 50) return '▓▓▓▓';
@@ -203,6 +236,7 @@ export default function App() {
             playRef={playRef}
             pauseRef={pauseRef}
             isActive={currentRoom === 'movie'}
+            movies={movies}
           />
           {isHost && (
             <HostControls
@@ -213,6 +247,8 @@ export default function App() {
               playRef={playRef}
               pauseRef={pauseRef}
               onSeekPercent={handleSeekPercent}
+              movies={movies}
+              onReorderMovies={handleReorderMovies}
             />
           )}
         </div>

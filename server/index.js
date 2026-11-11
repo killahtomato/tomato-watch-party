@@ -9,6 +9,7 @@ import { authenticateHost, verifyHostPassword } from './auth.js';
 import {
   getMovieList,
   getMovieDir,
+  getMusicDir,
   getStreamDir,
   getStreamPath,
   initCache,
@@ -19,6 +20,7 @@ import {
   STREAM_DIR,
 } from './streamManager.js';
 import { getAudioFileList } from './djManager.js';
+import { getOrder } from './orderStore.js';
 import { existsSync, mkdirSync, readFileSync } from 'fs';
 import { logger } from './logger.js';
 import { execFile } from 'child_process';
@@ -196,6 +198,12 @@ app.get('/api/audio-files', async (req, res) => {
   res.json(tracks);
 });
 
+app.get('/api/order/:room', (req, res) => {
+  const room = req.params.room === 'dj' ? 'dj' : req.params.room === 'movie' ? 'movie' : null;
+  if (!room) return res.status(400).json({ error: 'Invalid room' });
+  res.json({ order: getOrder(room) });
+});
+
 app.get('/api/audio-file/:track', (req, res) => {
   let trackName;
   try {
@@ -205,7 +213,7 @@ app.get('/api/audio-file/:track', (req, res) => {
   }
   if (!isSafeName(trackName)) return res.status(400).json({ error: 'Invalid track name' });
 
-  const trackPath = safeJoin(getMovieDir(), trackName);
+  const trackPath = safeJoin(getMusicDir(), trackName);
   if (!existsSync(trackPath)) return res.status(404).json({ error: 'Not found' });
   res.sendFile(trackPath);
 });

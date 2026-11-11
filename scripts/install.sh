@@ -33,6 +33,7 @@ echo "Setting up application in $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
 rsync -a \
   --exclude='movies' \
+  --exclude='music' \
   --exclude='streams' \
   --exclude='hls' \
   --exclude='node_modules' \
@@ -50,7 +51,7 @@ cd server && npm install --production && cd ..
 cd client && npm install && npm run build && cd ..
 
 # Setup directories
-mkdir -p "$INSTALL_DIR/movies" "$INSTALL_DIR/streams"
+mkdir -p "$INSTALL_DIR/movies" "$INSTALL_DIR/music" "$INSTALL_DIR/streams"
 
 # Setup .env if missing, with random secrets
 if [ ! -f .env ]; then
@@ -70,7 +71,7 @@ echo "Application installed at: $INSTALL_DIR"
 echo ""
 echo "Next steps:"
 echo "  1. Review $INSTALL_DIR/.env (secrets were generated if missing)"
-echo "  2. Place movie files in $INSTALL_DIR/movies"
+echo "  2. Place movie files in $INSTALL_DIR/movies and DJ tracks in $INSTALL_DIR/music"
 echo "  3. Start with: cd $INSTALL_DIR && npm start"
 echo ""
 echo "To run as a systemd service:"

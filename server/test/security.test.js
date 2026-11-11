@@ -13,6 +13,7 @@ process.env.LOG_FILE = join(tmpdir(), 'twp-test-server.log');
 
 const auth = await import('../auth.js');
 const sm = await import('../streamManager.js');
+const orderStore = await import('../orderStore.js');
 
 test('isSafeName rejects traversal and accepts normal names', () => {
   assert.equal(sm.isSafeName('Movie.mp4'), true);
@@ -79,6 +80,19 @@ test('verifyHostPassword compares safely', () => {
   assert.equal(auth.verifyHostPassword('wrong'), false);
   assert.equal(auth.verifyHostPassword(''), false);
   assert.equal(auth.verifyHostPassword(undefined), false);
+});
+
+test('order store round-trips per room', () => {
+  orderStore.setOrder('dj', ['b.mp3', 'a.flac']);
+  orderStore.setOrder('movie', ['m1.mp4']);
+  assert.deepEqual(orderStore.getOrder('dj'), ['b.mp3', 'a.flac']);
+  assert.deepEqual(orderStore.getOrder('movie'), ['m1.mp4']);
+  assert.deepEqual(orderStore.getOrder('bogus'), []);
+});
+
+test('order store drops unsafe names', () => {
+  orderStore.setOrder('dj', ['ok.mp3', '../evil', 'a/b', '', null]);
+  assert.deepEqual(orderStore.getOrder('dj'), ['ok.mp3']);
 });
 
 test('auth fails fast when JWT_SECRET is missing or default', () => {

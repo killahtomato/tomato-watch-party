@@ -2,40 +2,62 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 
 const QUALITY_PRESETS = ['1080p', '720p', '480p'];
 
-export default function HostControls({ emit, on, playbackPercent, seekRef, playRef, pauseRef, onSeekPercent }) {
-  const [movies, setMovies] = useState([]);
+export default function HostControls({ emit, on, playbackPercent, seekRef, playRef, pauseRef, onSeekPercent, movies = [], onReorderMovies }) {
   const [playbackState, setPlaybackState] = useState(null);
   const [dragTime, setDragTime] = useState(null);
   const [reactionsEnabled, setReactionsEnabled] = useState(true);
   const [moviesPanelOpen, setMoviesPanelOpen] = useState(false);
   const [forcedQuality, setForcedQuality] = useState(null);
+  const [dragIndex, setDragIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
   const popupRef = useRef(null);
 
   useEffect(() => {
-    fetch('/api/movies')
-      .then((r) => r.json())
-      .then(setMovies);
-
     const unsub = on('playbackUpdate', setPlaybackState);
     const unsubJoined = on('joined', (data) => {
       if (data.playbackState) setPlaybackState(data.playbackState);
     });
-    const unsubMovies = on('movies:updated', setMovies);
 
     return () => {
       unsub?.();
       unsubJoined?.();
-      unsubMovies?.();
     };
   }, [on]);
 
   const handleRefreshMovies = useCallback(() => {
     emit('host:refreshMovies', {}, (res) => {
-      if (res?.success) {
-        fetch('/api/movies').then(r => r.json()).then(setMovies);
-      }
+      if (res?.error) console.error(res.error);
     });
   }, [emit]);
+
+  const handleDragStart = useCallback((index) => (e) => {
+    setDragIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  }, []);
+
+  const handleDragOver = useCallback((index) => (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverIndex(index);
+  }, []);
+
+  const handleDrop = useCallback((index) => (e) => {
+    e.preventDefault();
+    const from = dragIndex ?? parseInt(e.dataTransfer.getData('text/plain'), 10);
+    setDragIndex(null);
+    setDragOverIndex(null);
+    if (Number.isNaN(from) || from === index) return;
+    const next = [...movies];
+    const [moved] = next.splice(from, 1);
+    next.splice(index, 0, moved);
+    onReorderMovies?.(next);
+  }, [dragIndex, movies, onReorderMovies]);
+
+  const handleDragEnd = useCallback(() => {
+    setDragIndex(null);
+    setDragOverIndex(null);
+  }, []);
 
   const handleResync = useCallback(() => {
     emit('host:resync', {});
@@ -205,12 +227,18 @@ export default function HostControls({ emit, on, playbackPercent, seekRef, playR
         </div>
         <div className="movie-panel-list">
           {movies.length === 0 && <p>No movies found in folder.</p>}
-          {movies.map((movie) => (
+          {movies.map((movie, index) => (
             <button
               key={movie.name}
-              className={`movie-item ${playbackState?.movie === movie.name ? 'active' : ''}`}
+              className={`movie-item ${playbackState?.movie === movie.name ? 'active' : ''} ${dragIndex === index ? 'dragging' : ''} ${dragOverIndex === index ? 'drag-over' : ''}`}
               onClick={() => handlePlayMovie(movie.name)}
+              draggable
+              onDragStart={handleDragStart(index)}
+              onDragOver={handleDragOver(index)}
+              onDrop={handleDrop(index)}
+              onDragEnd={handleDragEnd}
             >
+              <span className="movie-drag-handle" title="Drag to reorder">⋮⋮</span>
               <span>
                 {movie.displayName}
                 {movie.cached && <span className="movie-cached" title="Cached"></span>}

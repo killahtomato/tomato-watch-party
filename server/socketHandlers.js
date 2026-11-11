@@ -26,6 +26,7 @@ import {
 } from './djManager.js';
 import { logger } from './logger.js';
 import { setIoRef } from './streamManager.js';
+import { setOrder } from './orderStore.js';
 
 const MAX_CHAT_HISTORY = 200;
 
@@ -353,6 +354,17 @@ export function setupSocketHandlers(io) {
       callback?.({ success: true, state });
     });
 
+    socket.on('movie:setOrder', (data, callback) => {
+      if (!isHostSocket(socket) || getRoom(socket) !== 'movie') return callback?.({ error: 'Unauthorized' });
+      try {
+        const order = setOrder('movie', data?.order);
+        broadcastToRoom(io, 'movie', 'orderUpdate', { room: 'movie', order });
+        callback?.({ success: true, order });
+      } catch (err) {
+        callback?.({ error: err.message });
+      }
+    });
+
     socket.on('host:forceQuality', (data, callback) => {
       if (!isHostSocket(socket) || getRoom(socket) !== 'movie') return callback?.({ error: 'Unauthorized' });
       const quality = data?.quality;
@@ -423,6 +435,17 @@ export function setupSocketHandlers(io) {
 
     socket.on('dj:playlist', (_data, callback) => {
       callback?.({ success: true, playlist: getPlaylist() });
+    });
+
+    socket.on('dj:setOrder', (data, callback) => {
+      if (!isDJHostSocket(socket)) return callback?.({ error: 'Unauthorized' });
+      try {
+        const order = setOrder('dj', data?.order);
+        broadcastToRoom(io, 'dj', 'orderUpdate', { room: 'dj', order });
+        callback?.({ success: true, order });
+      } catch (err) {
+        callback?.({ error: err.message });
+      }
     });
 
     socket.on('host:authenticate', (data, callback) => {

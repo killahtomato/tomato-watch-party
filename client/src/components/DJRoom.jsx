@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import AudioVisualizer from './AudioVisualizer.jsx';
+import { applyOrder } from '../utils/order.js';
 
 export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActive = true, seekRef, playRef, pauseRef, onSeekPercent, onPercentUpdate, playbackPercent = 0 }) {
   const audioRef = useRef(null);
@@ -16,6 +17,10 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
   const [reactions, setReactions] = useState([]);
   const [reactionsEnabled, setReactionsEnabled] = useState(true);
   const [trackListOpen, setTrackListOpen] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [dragIndex, setDragIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
 
   const tracksRef = useRef(tracks);
   tracksRef.current = tracks;
@@ -26,12 +31,67 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
     ? `/api/audio-file/${encodeURIComponent(playbackState.track)}`
     : null;
 
-  useEffect(() => {
-    fetch('/api/audio-files').then(r => r.json()).then(setTracks).catch(() => {});
+  const loadTracks = useCallback(() => {
+    Promise.all([
+      fetch('/api/audio-files').then(r => r.json()).catch(() => []),
+      fetch('/api/order/dj').then(r => r.json()).catch(() => ({ order: [] })),
+    ]).then(([list, orderData]) => {
+      const trackList = Array.isArray(list) ? list : [];
+      const savedOrder = Array.isArray(orderData?.order) ? orderData.order : [];
+      setTracks(applyOrder(trackList, savedOrder));
+    });
   }, []);
 
+  useEffect(() => {
+    loadTracks();
+  }, [loadTracks]);
+
+  useEffect(() => {
+    const unsub = on('orderUpdate', (data) => {
+      if (data?.room === 'dj') {
+        setTracks(prev => applyOrder(prev, Array.isArray(data.order) ? data.order : []));
+      }
+    });
+    return () => unsub?.();
+  }, [on]);
+
   const handleRefreshTracks = useCallback(() => {
-    fetch('/api/audio-files').then(r => r.json()).then(setTracks).catch(() => {});
+    loadTracks();
+  }, [loadTracks]);
+
+  const handleDragStart = useCallback((index) => (e) => {
+    if (!isDJ) return;
+    setDragIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  }, [isDJ]);
+
+  const handleDragOver = useCallback((index) => (e) => {
+    if (!isDJ) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverIndex(index);
+  }, [isDJ]);
+
+  const handleDrop = useCallback((index) => (e) => {
+    if (!isDJ) return;
+    e.preventDefault();
+    const from = dragIndex ?? parseInt(e.dataTransfer.getData('text/plain'), 10);
+    setDragIndex(null);
+    setDragOverIndex(null);
+    if (Number.isNaN(from) || from === index) return;
+    const next = [...tracks];
+    const [moved] = next.splice(from, 1);
+    next.splice(index, 0, moved);
+    setTracks(next);
+    emit('dj:setOrder', { order: next.map(t => t.name) }, (res) => {
+      if (res?.error) console.error(res.error);
+    });
+  }, [dragIndex, tracks, emit, isDJ]);
+
+  const handleDragEnd = useCallback(() => {
+    setDragIndex(null);
+    setDragOverIndex(null);
   }, []);
 
   useEffect(() => {
@@ -173,6 +233,10 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
       }
     }
   }, [isActive, playbackState.isPlaying]);
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = isMuted ? 0 : volume;
+  }, [isMuted, volume]);
 
   useEffect(() => {
     const unsub = on('dj:reaction', (data) => {
@@ -331,6 +395,21 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
           </div>
         )}
 
+        <div className="dj-volume-control">
+          <button className="mute-btn" onClick={() => setIsMuted(m => !m)} title={isMuted ? 'Unmute' : 'Mute'}>
+            {isMuted ? '🔇' : volume > 0.5 ? '🔊' : volume > 0 ? '🔉' : '🔈'}
+          </button>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={volume}
+            onChange={(e) => setVolume(parseFloat(e.target.value))}
+            className="volume-slider"
+          />
+        </div>
+
         <audio ref={audioRef} preload="auto" playsInline />
       </div>
 
@@ -341,12 +420,18 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
         </div>
         <div className="dj-track-list">
           {tracks.length === 0 && <p className="dj-no-tracks">No audio files found</p>}
-          {tracks.map(track => (
+          {tracks.map((track, index) => (
             <button
               key={track.name}
-              className={`dj-track ${playbackState.track === track.name ? 'active' : ''}`}
+              className={`dj-track ${playbackState.track === track.name ? 'active' : ''} ${dragIndex === index ? 'dragging' : ''} ${dragOverIndex === index ? 'drag-over' : ''}`}
               onClick={() => isDJ && handlePlayTrack(track.name)}
+              draggable={isDJ}
+              onDragStart={handleDragStart(index)}
+              onDragOver={handleDragOver(index)}
+              onDrop={handleDrop(index)}
+              onDragEnd={handleDragEnd}
             >
+              {isDJ && <span className="dj-drag-handle" title="Drag to reorder">⋮⋮</span>}
               <span className="dj-track-name">{track.displayName}</span>
               {track.duration && <span className="dj-track-duration">{formatTime(track.duration)}</span>}
             </button>

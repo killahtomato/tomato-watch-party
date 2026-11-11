@@ -65,7 +65,7 @@ echo "HOST_PASSWORD=$(openssl rand -base64 24)" >> .env
 echo "JWT_SECRET=$(openssl rand -hex 32)" >> .env
 ```
 
-The server refuses to start while `HOST_PASSWORD` or `JWT_SECRET` is unset or still a default value. `MOVIE_DIR` and `STREAM_DIR` default to `./movies` and `./streams`; set them to absolute paths for remote sharing.
+The server refuses to start while `HOST_PASSWORD` or `JWT_SECRET` is unset or still a default value. `MOVIE_DIR`, `MUSIC_DIR`, and `STREAM_DIR` default to `./movies`, `./music`, and `./streams`; set them to absolute paths for remote sharing. The DJ room reads its track list from `MUSIC_DIR`.
 
 ## Transcoding
 

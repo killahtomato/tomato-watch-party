@@ -43,13 +43,14 @@ function formatLabel(lang, title) {
   return langName;
 }
 
-export default function VideoPlayer({ userName, isHost, emit, on, sessionData, onTimeUpdate, seekRef, playRef, pauseRef, isActive = true }) {
+export default function VideoPlayer({ userName, isHost, emit, on, sessionData, onTimeUpdate, seekRef, playRef, pauseRef, isActive = true, movies = [] }) {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
   const playbackRef = useRef({ isPlaying: false, currentTime: 0 });
   const isQualitySwitching = useRef(false);
   const lastSeekTime = useRef(0);
   const subIntervalRef = useRef(null);
+  const pendingAutoplayRef = useRef(null);
   const [playbackState, setPlaybackState] = useState(
     sessionData?.playbackState || { movie: null, isPlaying: false, currentTime: 0, transcoding: false, transcodeProgress: 0 }
   );
@@ -139,7 +140,22 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
       }, 2000);
     };
     const handleEnded = () => {
-      if (isHost) emit('host:ended', {});
+      if (isHost) {
+        const list = movies || [];
+        const currentIndex = list.findIndex(m => m.name === playbackState.movie);
+        const nextMovie = currentIndex >= 0 ? list[currentIndex + 1] : null;
+        if (nextMovie) {
+          pendingAutoplayRef.current = true;
+          emit('host:playMovie', { movie: nextMovie.name }, (res) => {
+            if (res?.success) {
+              emit('host:resume', {});
+            } else {
+              pendingAutoplayRef.current = false;
+            }
+          });
+          return;
+        }
+      }
       setMovieEnded(true);
     };
 
@@ -172,7 +188,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
       clearInterval(poll1);
       clearInterval(poll2);
     };
-  }, [onTimeUpdate, streamUrl, isHost, emit]);
+  }, [onTimeUpdate, streamUrl, isHost, emit, movies, playRef, playbackState.movie]);
 
   useEffect(() => {
     if (!playbackState?.movie) return;
@@ -315,7 +331,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     const handlePlaybackUpdate = (state) => {
       setPlaybackState(state);
       playbackRef.current = { isPlaying: state.isPlaying, currentTime: state.currentTime };
-      if (state.movie && movieEnded) setMovieEnded(false);
+      if (state.movie && state.movie !== playbackState.movie && movieEnded) setMovieEnded(false);
       if (state.isPlaying && videoError) setVideoError(false);
       if (!state.transcoding && videoError) setVideoError(false);
       if (isHost) return;
@@ -382,6 +398,16 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     if (playRef) playRef.current = () => { if (videoRef.current) videoRef.current.play().catch(() => {}); };
     if (pauseRef) pauseRef.current = () => { if (videoRef.current) videoRef.current.pause(); };
   }, [seekRef, playRef, pauseRef]);
+
+  useEffect(() => {
+    if (!pendingAutoplayRef.current || !streamUrl || !playbackState.isPlaying) return;
+    pendingAutoplayRef.current = false;
+    const video = videoRef.current;
+    if (video) {
+      video.load();
+      playRef.current?.();
+    }
+  }, [streamUrl, playbackState.isPlaying, playRef]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -493,6 +519,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
           <div className="movie-ended-content">
             <span className="movie-ended-icon">🎬</span>
             <h2>The End</h2>
+            <p>Thank you for watching! :3</p>
           </div>
         </div>
       )}
