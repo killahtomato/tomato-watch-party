@@ -14,8 +14,10 @@ Switch between rooms instantly. Both rooms keep playing independently.
 ## Quick Start
 
 ```bash
-# 1. Copy environment file
+# 1. Copy environment file and set strong secrets
 cp .env.example .env
+echo "HOST_PASSWORD=$(openssl rand -base64 24)" >> .env
+echo "JWT_SECRET=$(openssl rand -hex 32)" >> .env
 
 # 2. Start the server
 ./twp-start
@@ -55,15 +57,15 @@ open http://localhost:3000
 
 ## Configuration
 
-Copy `.env.example` to `.env` and customize:
+Copy `.env.example` to `.env` and set strong values:
 
-```env
-HOST_PASSWORD=changeme
-MOVIE_DIR=./movies
-STREAM_DIR=./streams
-PORT=3000
-JWT_SECRET=your-secret-here
+```bash
+cp .env.example .env
+echo "HOST_PASSWORD=$(openssl rand -base64 24)" >> .env
+echo "JWT_SECRET=$(openssl rand -hex 32)" >> .env
 ```
+
+The server refuses to start while `HOST_PASSWORD` or `JWT_SECRET` is unset or still a default value. `MOVIE_DIR` and `STREAM_DIR` default to `./movies` and `./streams`; set them to absolute paths for remote sharing.
 
 ## Transcoding
 
@@ -92,11 +94,15 @@ Use Cloudflare Tunnel to share your party with friends:
 
 The script installs dependencies if missing, starts the server, launches cloudflared, and prints a shareable `trycloudflare.com` URL.
 
+The tunnel URL is public. Use a strong `HOST_PASSWORD`, keep `JWT_SECRET` secret, and avoid posting the URL publicly. For anything beyond a private party, put the tunnel behind Cloudflare Access or another access-control layer.
+
 ## Docker
 
 ```bash
-docker-compose up -d
+HOST_PASSWORD=change-me JWT_SECRET=$(openssl rand -hex 32) docker-compose up -d
 ```
+
+Both `HOST_PASSWORD` and `JWT_SECRET` must be set; the container refuses to start without them.
 
 ## Tech Stack
 

@@ -18,6 +18,6 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     minify: false,
-    sourcemap: true,
+    sourcemap: false,
   },
 });

@@ -1,7 +1,6 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import cors from 'cors';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -32,27 +31,100 @@ dotenv.config({ path: join(__dirname, '..', '.env') });
 
 const app = express();
 const httpServer = createServer(app);
+
+const ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  ...(process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean),
+];
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  return /^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(origin);
+}
+
+function isSameOrigin(origin, req) {
+  const host = req.headers.host;
+  if (!host) return false;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
+function isOriginAllowed(origin, req) {
+  return isAllowedOrigin(origin) || isSameOrigin(origin, req);
+}
+
 const io = new Server(httpServer, {
-  cors: { origin: '*' },
+  allowRequest(req, callback) {
+    const origin = req.headers.origin;
+    if (isOriginAllowed(origin, req)) return callback(null, true);
+    return callback('Origin not allowed', false);
+  },
 });
 
-app.use(cors());
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && isOriginAllowed(origin, req)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Vary', 'Origin');
+  }
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(origin && isOriginAllowed(origin, req) ? 204 : 403);
+  }
+  next();
+});
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
 app.use(express.json());
 app.use(express.static(join(__dirname, '..', 'client', 'dist')));
 
 const loginAttempts = new Map();
+const LOGIN_RATE_MAX = 5;
+const LOGIN_RATE_WINDOW_MS = 60000;
 
-function isRateLimited(key, max = 5, windowMs = 60000) {
+function getClientKey(req) {
+  const isLoopback = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.ip);
+  if (isLoopback) {
+    const cf = req.headers['cf-connecting-ip'];
+    if (cf) return String(cf).split(',')[0].trim();
+    const xff = req.headers['x-forwarded-for'];
+    if (xff) return String(xff).split(',')[0].trim();
+  }
+  return req.ip || 'unknown';
+}
+
+function isRateLimited(req, prefix) {
+  const key = `${prefix}:${getClientKey(req)}`;
   const now = Date.now();
-  const entry = loginAttempts.get(key) || { count: 0, resetAt: now + windowMs };
+  const entry = loginAttempts.get(key) || { count: 0, resetAt: now + LOGIN_RATE_WINDOW_MS };
   if (now > entry.resetAt) {
     entry.count = 0;
-    entry.resetAt = now + windowMs;
+    entry.resetAt = now + LOGIN_RATE_WINDOW_MS;
   }
   entry.count++;
   loginAttempts.set(key, entry);
-  return entry.count > max;
+  return entry.count > LOGIN_RATE_MAX;
 }
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of loginAttempts) {
+    if (now > entry.resetAt) loginAttempts.delete(key);
+  }
+}, LOGIN_RATE_WINDOW_MS).unref();
 
 app.use('/stream', (req, res, next) => {
   let path;
@@ -96,7 +168,7 @@ app.get('/api/movies', async (req, res) => {
 });
 
 app.post('/api/host/login', (req, res) => {
-  if (isRateLimited(`host:${req.ip}`)) {
+  if (isRateLimited(req, 'host')) {
     return res.status(429).json({ error: 'Too many attempts' });
   }
   if (verifyHostPassword(req.body?.password)) {
@@ -108,7 +180,7 @@ app.post('/api/host/login', (req, res) => {
 });
 
 app.post('/api/dj/login', (req, res) => {
-  if (isRateLimited(`dj:${req.ip}`)) {
+  if (isRateLimited(req, 'dj')) {
     return res.status(429).json({ error: 'Too many attempts' });
   }
   if (verifyHostPassword(req.body?.password)) {

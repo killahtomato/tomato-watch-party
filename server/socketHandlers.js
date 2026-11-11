@@ -491,6 +491,7 @@ export function setupSocketHandlers(io) {
       }
       state.users.delete(socket.id);
       viewerHealth.delete(socket.id);
+      throwCooldowns.delete(socket.id);
       broadcastUsersList(io, room);
     });
 
