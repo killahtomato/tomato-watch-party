@@ -46,6 +46,11 @@ function getTimeoutMs() {
   return Number.isFinite(value) && value > 0 ? value : 30000;
 }
 
+function getProbeTimeoutMs() {
+  const value = Number(process.env.TOMATOPLAY_PROBE_TIMEOUT_MS);
+  return Number.isFinite(value) && value > 0 ? value : 180000;
+}
+
 function isAvailable() {
   return isEnabled() && existsSync(getBin());
 }
@@ -90,7 +95,7 @@ function parseTomatoJson(text, action) {
   return data;
 }
 
-function runProcess(args, input) {
+function runProcess(args, input, timeoutMs = getTimeoutMs()) {
   return new Promise((resolve, reject) => {
     const child = spawn('bash', [getBin(), '--json', ...args], { stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
@@ -101,7 +106,7 @@ function runProcess(args, input) {
       settled = true;
       child.kill('SIGTERM');
       reject(fail(args[0] || '', 'tomato-play timed out'));
-    }, getTimeoutMs());
+    }, timeoutMs);
 
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
@@ -246,7 +251,7 @@ export async function tomatoProbe(results) {
 
   const request = (async () => {
     try {
-      const stdout = await runProcess(['probe'], tsv);
+      const stdout = await runProcess(['probe'], tsv, getProbeTimeoutMs());
       const data = parseTomatoJson(stdout, 'probe');
       const playable = Array.isArray(data.results) ? data.results : [];
       setCached(key, 'probe', playable);
