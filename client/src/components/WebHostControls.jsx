@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import WebSearchPanel from './WebSearchPanel.jsx';
 import MovieLibraryPanel from './MovieLibraryPanel.jsx';
 
 function formatTime(seconds) {
@@ -11,8 +10,7 @@ function formatTime(seconds) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export default function WebHostControls({ emit, webState, seekRef, playRef, pauseRef, progress, movies = [], onReorderMovies }) {
-  const [panelOpen, setPanelOpen] = useState(false);
+export default function WebHostControls({ emit, webState, seekRef, playRef, pauseRef, progress, movies = [], onReorderMovies, webPanelOpen, setWebPanelOpen }) {
   const [moviePanelOpen, setMoviePanelOpen] = useState(false);
   const [reactionsEnabled, setReactionsEnabled] = useState(true);
   const [dragPercent, setDragPercent] = useState(null);
@@ -58,13 +56,6 @@ export default function WebHostControls({ emit, webState, seekRef, playRef, paus
       emit('host:reactions:toggle', { enabled: next });
       return next;
     });
-  }, [emit]);
-
-  const handlePlay = useCallback((descriptor) => {
-    emit('web:play', descriptor, (response) => {
-      if (response?.error) alert(response.error);
-    });
-    setPanelOpen(false);
   }, [emit]);
 
   return (
@@ -127,28 +118,16 @@ export default function WebHostControls({ emit, webState, seekRef, playRef, paus
       />
 
       <div
-        className={`movie-panel-tab web-panel-tab${panelOpen ? ' open' : ''}`}
+        className={`movie-panel-tab web-panel-tab${webPanelOpen ? ' open' : ''}`}
         onClick={() => {
-          const next = !panelOpen;
-          setPanelOpen(next);
+          const next = !webPanelOpen;
+          setWebPanelOpen(next);
           if (next) setMoviePanelOpen(false);
         }}
         title="Web search"
       >
         🌐
       </div>
-
-      {panelOpen && (
-        <div className="movie-panel web-panel open">
-          <div className="movie-panel-header">
-            <h4>Web Search</h4>
-            <div className="movie-panel-actions">
-              <button className="movie-panel-close" onClick={() => setPanelOpen(false)}>✕</button>
-            </div>
-          </div>
-          <WebSearchPanel emit={emit} isHost onPlay={handlePlay} />
-        </div>
-      )}
     </div>
   );
 }

@@ -6,7 +6,6 @@ const SOURCES = [
   ['gogoanime', 'gogoanime'],
   ['9anime', '9anime'],
   ['hianime', 'hianime'],
-  ['miruro', 'miruro'],
   ['animegg', 'animegg'],
   ['bilibili', 'bilibili'],
   ['youtube', 'youtube'],

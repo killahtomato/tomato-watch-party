@@ -1,15 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import WebSearchPanel from './WebSearchPanel.jsx';
 import MovieLibraryPanel from './MovieLibraryPanel.jsx';
 
 const QUALITY_PRESETS = ['1080p', '720p', '480p'];
 
-export default function HostControls({ emit, on, playbackPercent, seekRef, playRef, pauseRef, onSeekPercent, movies = [], onReorderMovies }) {
+export default function HostControls({ emit, on, playbackPercent, seekRef, playRef, pauseRef, onSeekPercent, movies = [], onReorderMovies, webPanelOpen, setWebPanelOpen }) {
   const [playbackState, setPlaybackState] = useState(null);
   const [dragTime, setDragTime] = useState(null);
   const [reactionsEnabled, setReactionsEnabled] = useState(true);
   const [moviesPanelOpen, setMoviesPanelOpen] = useState(false);
-  const [webPanelOpen, setWebPanelOpen] = useState(false);
   const [forcedQuality, setForcedQuality] = useState(null);
   const popupRef = useRef(null);
 
@@ -28,13 +26,6 @@ export default function HostControls({ emit, on, playbackPercent, seekRef, playR
   const handleResync = useCallback(() => {
     emit('host:resync', {});
   }, [emit]);
-
-  const handleWebPlay = (descriptor) => {
-    emit('web:play', descriptor, (response) => {
-      if (response?.error) alert(response.error);
-    });
-    setWebPanelOpen(false);
-  };
 
   const handlePause = () => {
     if (pauseRef?.current) pauseRef.current();
@@ -202,18 +193,6 @@ export default function HostControls({ emit, on, playbackPercent, seekRef, playR
       >
         🌐
       </div>
-
-      {webPanelOpen && (
-        <div className="movie-panel web-panel open">
-          <div className="movie-panel-header">
-            <h4>Web Search</h4>
-            <div className="movie-panel-actions">
-              <button className="movie-panel-close" onClick={() => setWebPanelOpen(false)}>✕</button>
-            </div>
-          </div>
-          <WebSearchPanel emit={emit} isHost onPlay={handleWebPlay} />
-        </div>
-      )}
     </div>
   );
 }

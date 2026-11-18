@@ -6,6 +6,7 @@ import Chat from './components/Chat.jsx';
 import HostControls from './components/HostControls.jsx';
 import WebPlayer from './components/WebPlayer.jsx';
 import WebHostControls from './components/WebHostControls.jsx';
+import WebSearchPanel from './components/WebSearchPanel.jsx';
 import DJRoom from './components/DJRoom.jsx';
 import RoomSwitcher from './components/RoomSwitcher.jsx';
 import { applyOrder } from './utils/order.js';
@@ -35,6 +36,7 @@ export default function App() {
   const [movies, setMovies] = useState([]);
   const [webState, setWebState] = useState(null);
   const [webProgress, setWebProgress] = useState({ current: 0, duration: 0, live: false });
+  const [webPanelOpen, setWebPanelOpen] = useState(false);
 
   const handleSeekPercent = useCallback((pct) => {
     setPlaybackPercent(pct);
@@ -187,6 +189,13 @@ export default function App() {
     });
   }, [emit]);
 
+  const handleWebPlay = useCallback((descriptor) => {
+    emit('web:play', descriptor, (res) => {
+      if (res?.error) alert(res.error);
+    });
+    setWebPanelOpen(false);
+  }, [emit]);
+
   useEffect(() => {
     loadMovies();
     const unsubUpdated = on('movies:updated', loadMovies);
@@ -274,6 +283,8 @@ export default function App() {
               progress={webProgress}
               movies={movies}
               onReorderMovies={handleReorderMovies}
+              webPanelOpen={webPanelOpen}
+              setWebPanelOpen={setWebPanelOpen}
             />
           ) : (
             <HostControls
@@ -286,6 +297,8 @@ export default function App() {
               onSeekPercent={handleSeekPercent}
               movies={movies}
               onReorderMovies={handleReorderMovies}
+              webPanelOpen={webPanelOpen}
+              setWebPanelOpen={setWebPanelOpen}
             />
           ))}
         </div>
@@ -307,6 +320,18 @@ export default function App() {
         </div>
         </div>
       </div>
+
+      {isHost && (
+        <div className={`movie-panel web-panel${webPanelOpen && currentRoom === 'movie' ? ' open' : ''}`}>
+          <div className="movie-panel-header">
+            <h4>Web Search</h4>
+            <div className="movie-panel-actions">
+              <button className="movie-panel-close" onClick={() => setWebPanelOpen(false)}>✕</button>
+            </div>
+          </div>
+          <WebSearchPanel emit={emit} isHost onPlay={handleWebPlay} />
+        </div>
+      )}
 
       <div className="sidebar">
         {currentRoom === 'movie' && webState?.web && (
