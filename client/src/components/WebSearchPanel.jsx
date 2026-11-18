@@ -20,6 +20,7 @@ export default function WebSearchPanel({ emit, isHost, onPlay }) {
   const [results, setResults] = useState([]);
   const [selectedResult, setSelectedResult] = useState(null);
   const [episodes, setEpisodes] = useState([]);
+  const [episodeFilter, setEpisodeFilter] = useState('');
   const [selectedEpisode, setSelectedEpisode] = useState(null);
   const [modes, setModes] = useState([]);
   const [mode, setMode] = useState('sub');
@@ -43,6 +44,7 @@ export default function WebSearchPanel({ emit, isHost, onPlay }) {
     setResults([]);
     setSelectedResult(null);
     setEpisodes([]);
+    setEpisodeFilter('');
     setSelectedEpisode(null);
     setResolved(null);
     try {
@@ -56,12 +58,23 @@ export default function WebSearchPanel({ emit, isHost, onPlay }) {
     }
   }, [query, source, busy, run]);
 
+  const handleChangeSeries = useCallback(() => {
+    setSelectedResult(null);
+    setEpisodes([]);
+    setEpisodeFilter('');
+    setSelectedEpisode(null);
+    setResolved(null);
+    setModes([]);
+    setError('');
+  }, []);
+
   const handlePickResult = useCallback(async (result) => {
     if (busy) return;
     setBusy(true);
     setError('');
     setSelectedResult(result);
     setEpisodes([]);
+    setEpisodeFilter('');
     setSelectedEpisode(null);
     setResolved(null);
     setModes([]);
@@ -159,6 +172,13 @@ export default function WebSearchPanel({ emit, isHost, onPlay }) {
   if (!isHost) return null;
 
   const playableStreams = resolved?.streams || [];
+  const filter = episodeFilter.trim().toLowerCase();
+  const filteredEpisodes = filter
+    ? episodes.filter((episode) => (
+      String(episode.number).toLowerCase().includes(filter)
+      || (episode.title || '').toLowerCase().includes(filter)
+    ))
+    : episodes;
 
   return (
     <div className="web-search-panel">
@@ -179,58 +199,110 @@ export default function WebSearchPanel({ emit, isHost, onPlay }) {
       {error && <p className="web-search-error">{error}</p>}
       {busy && <p className="web-search-busy">Working...</p>}
 
-      {results.length > 0 && (
-        <div className="web-search-results">
-          {results.map((result) => (
-            <button
-              key={`${result.source}:${result.id}`}
-              className={`web-result-item ${selectedResult?.id === result.id ? 'active' : ''}`}
-              onClick={() => handlePickResult(result)}
-            >
-              <span className="web-result-source">{result.source}</span>
-              <span className="web-result-title">{result.title}</span>
-            </button>
-          ))}
+      <div className="web-picker">
+        <div className="web-picker-left">
+          {!selectedResult ? (
+            <div className="web-results">
+              {busy && <p className="web-hint">Searching...</p>}
+              {!busy && results.length === 0 && <p className="web-hint">Search for a show to get started.</p>}
+              {results.map((result) => (
+                <button
+                  key={`${result.source}:${result.id}`}
+                  className={`web-result-item ${selectedResult?.id === result.id ? 'active' : ''}`}
+                  onClick={() => handlePickResult(result)}
+                >
+                  <span className="web-result-source">{result.source}</span>
+                  <span className="web-result-title">{result.title}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="web-picker-header">
+                <button type="button" className="web-back" onClick={handleChangeSeries}>← Change series</button>
+                <span className="web-picker-title" title={selectedResult.title}>{selectedResult.title}</span>
+              </div>
+              <input
+                type="text"
+                className="web-episode-filter"
+                placeholder="Filter episodes..."
+                value={episodeFilter}
+                onChange={(e) => setEpisodeFilter(e.target.value)}
+                disabled={busy}
+              />
+              <div className="web-episode-grid">
+                {filteredEpisodes.length === 0 && <p className="web-hint">No episodes match.</p>}
+                {filteredEpisodes.map((episode) => (
+                  <button
+                    key={episode.key}
+                    type="button"
+                    className={`web-episode-chip ${selectedEpisode?.key === episode.key ? 'active' : ''}`}
+                    onClick={() => handlePickEpisode(episode)}
+                    title={episode.title || `Episode ${episode.number}`}
+                  >
+                    {episode.number}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
-      )}
 
-      {episodes.length > 0 && (
-        <div className="web-episode-list">
-          {episodes.map((episode) => (
-            <button
-              key={episode.key}
-              className={`web-episode-item ${selectedEpisode?.key === episode.key ? 'active' : ''}`}
-              onClick={() => handlePickEpisode(episode)}
-            >
-              <span className="web-episode-number">EP {episode.number}</span>
-              <span className="web-episode-title">{episode.title}</span>
-            </button>
-          ))}
-        </div>
-      )}
+        <div className="web-picker-right">
+          {!selectedResult ? (
+            <p className="web-hint">Pick a series to see its episodes.</p>
+          ) : !selectedEpisode ? (
+            <p className="web-hint">Pick an episode to see playback options.</p>
+          ) : (
+            <div className="web-selected">
+              <div className="web-selected-title" title={selectedResult.title}>{selectedResult.title}</div>
+              <div className="web-selected-ep">Episode {selectedEpisode.number}</div>
 
-      {selectedEpisode && modes.length > 0 && (
-        <div className="web-mode-row">
-          {modes.map((m) => (
-            <button
-              key={m}
-              className={`web-mode-btn ${mode === m ? 'active' : ''}`}
-              onClick={() => handleModeChange(m)}
-            >
-              {m === 'dub' ? 'Dub' : 'Sub'}
-            </button>
-          ))}
-        </div>
-      )}
+              {modes.length > 0 && (
+                <div className="web-opt-row">
+                  <span className="web-opt-label">Mode</span>
+                  <div className="web-mode-row">
+                    {modes.map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        className={`web-mode-btn ${mode === m ? 'active' : ''}`}
+                        onClick={() => handleModeChange(m)}
+                        disabled={busy}
+                      >
+                        {m === 'dub' ? 'Dub' : 'Sub'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-      {playableStreams.length > 0 && (
-        <div className="web-play-row">
-          <select value={selectedQuality} onChange={(e) => setSelectedQuality(e.target.value)}>
-            {playableStreams.map((s) => <option key={s.url} value={s.quality}>{s.quality}</option>)}
-          </select>
-          <button className="web-play-btn" onClick={handlePlay}>Play</button>
+              {playableStreams.length > 0 && (
+                <div className="web-opt-row">
+                  <span className="web-opt-label">Quality</span>
+                  <select
+                    className="web-quality-select"
+                    value={selectedQuality}
+                    onChange={(e) => setSelectedQuality(e.target.value)}
+                    disabled={busy}
+                  >
+                    {playableStreams.map((s) => <option key={s.url} value={s.quality}>{s.quality}</option>)}
+                  </select>
+                </div>
+              )}
+
+              <button
+                type="button"
+                className="web-play-btn"
+                onClick={handlePlay}
+                disabled={busy || playableStreams.length === 0}
+              >
+                {busy ? 'Working...' : '▶ Play'}
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
