@@ -98,13 +98,20 @@ TOMATOPLAY_BIN=server/vendor/tomato-play/tomatoplay
 
 `TOMATOPLAY_BIN` is resolved relative to the project root when it is not absolute. The server logs `tomato-play integration ready` at startup, or a warning when the binary is missing (the Web tab is hidden in that case).
 
-The bundled tomato-play is a git submodule. Its `.gitmodules` URL is currently a local path (`/home/tomato/Work/tomato-play`); change it to the GitHub URL before sharing this repository:
-
-```bash
-git submodule set-url server/vendor/tomato-play https://github.com/killahtomato/tomato-play.git
-```
+The bundled tomato-play is a git submodule pointing at `https://github.com/killahtomato/tomato-play.git`. Clone recursively, or run `git submodule update --init --recursive` after a normal clone.
 
 The submodule is GPLv3 and this project is MIT. That is fine for private/local use, but a distributed combined work must be licensed under GPLv3.
+
+### Server deployment
+
+tomato-play is vendored, so you do not install it separately, but the server needs:
+
+- the submodule present (`git clone --recursive`, or copy `server/vendor/tomato-play`)
+- `bash` and `curl` (Debian/Ubuntu: `apt install curl`)
+- `TOMATOPLAY_ENABLED=1` in the environment (on by default in `.env.example` and Docker Compose)
+- a writable `HOME` for the tomato-play cache (`~/.cache/tomato-play`; override with `TOMATOPLAY_CACHE_DIR`)
+
+Docker: the image installs `ffmpeg` and `curl` and copies the submodule, and `docker-compose.yml` enables the integration by default (`TOMATOPLAY_ENABLED` defaults to `1`).
 
 ## Transcoding
 

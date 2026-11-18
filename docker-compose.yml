@@ -16,6 +16,8 @@ services:
       - STREAM_DIR=/app/server/streams
       - NODE_ENV=production
       - DEBUG=${DEBUG:-0}
+      - TOMATOPLAY_ENABLED=${TOMATOPLAY_ENABLED:-1}
+      - TOMATOPLAY_BIN=${TOMATOPLAY_BIN:-server/vendor/tomato-play/tomatoplay}
     restart: unless-stopped
 
 volumes:
