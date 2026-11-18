@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import WebSearchPanel from './WebSearchPanel.jsx';
 
 const QUALITY_PRESETS = ['1080p', '720p', '480p'];
 
@@ -7,6 +8,7 @@ export default function HostControls({ emit, on, playbackPercent, seekRef, playR
   const [dragTime, setDragTime] = useState(null);
   const [reactionsEnabled, setReactionsEnabled] = useState(true);
   const [moviesPanelOpen, setMoviesPanelOpen] = useState(false);
+  const [webPanelOpen, setWebPanelOpen] = useState(false);
   const [forcedQuality, setForcedQuality] = useState(null);
   const [dragIndex, setDragIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
@@ -68,6 +70,13 @@ export default function HostControls({ emit, on, playbackPercent, seekRef, playR
     emit('host:playMovie', { movie: movieName, quality: '1080p' }, (response) => {
       if (response?.error) alert(response.error);
     });
+  };
+
+  const handleWebPlay = (descriptor) => {
+    emit('web:play', descriptor, (response) => {
+      if (response?.error) alert(response.error);
+    });
+    setWebPanelOpen(false);
   };
 
   const handlePause = () => {
@@ -213,7 +222,7 @@ export default function HostControls({ emit, on, playbackPercent, seekRef, playR
         </select>
       </div>
 
-      <div className={`movie-panel-tab${moviesPanelOpen ? ' open' : ''}`} onClick={() => setMoviesPanelOpen(o => !o)}>
+      <div className={`movie-panel-tab${moviesPanelOpen ? ' open' : ''}`} onClick={() => { setMoviesPanelOpen(o => !o); setWebPanelOpen(false); }}>
         🎬
       </div>
 
@@ -248,6 +257,26 @@ export default function HostControls({ emit, on, playbackPercent, seekRef, playR
           ))}
         </div>
       </div>
+
+      <div
+        className={`movie-panel-tab web-panel-tab${webPanelOpen ? ' open' : ''}`}
+        onClick={() => { setWebPanelOpen(o => !o); setMoviesPanelOpen(false); }}
+        title="Web search"
+      >
+        🌐
+      </div>
+
+      {webPanelOpen && (
+        <div className="movie-panel web-panel open">
+          <div className="movie-panel-header">
+            <h4>Web Search</h4>
+            <div className="movie-panel-actions">
+              <button className="movie-panel-close" onClick={() => setWebPanelOpen(false)}>✕</button>
+            </div>
+          </div>
+          <WebSearchPanel emit={emit} isHost onPlay={handleWebPlay} />
+        </div>
+      )}
     </div>
   );
 }

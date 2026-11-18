@@ -1747,6 +1747,7 @@ video::media-controls { display: none !important; }
   padding: 8px 16px;
 }
 
+.web-panel-tab { left: calc(50% + 28px); transform: none; }
 .web-panel-tab.open { bottom: 380px; }
 .web-panel { height: 380px; transform: translateY(380px); }
 .web-panel.open { transform: translateY(0); }
