@@ -228,8 +228,9 @@ export default function WebPlayer({
   }, [isMuted, volume]);
 
   useEffect(() => {
-    if (videoRef.current) videoRef.current.muted = !isActive;
-  }, [isActive]);
+    const video = videoRef.current;
+    if (video) video.muted = !isActive || isMuted;
+  }, [isActive, isMuted]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.volume = 0;
@@ -338,7 +339,6 @@ export default function WebPlayer({
         playsInline
         controls={false}
         disablePictureInPicture
-        muted
         onDoubleClick={() => {
           if (document.fullscreenElement) document.exitFullscreen();
           else videoRef.current?.requestFullscreen();
