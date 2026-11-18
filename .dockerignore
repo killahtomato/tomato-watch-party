@@ -2,6 +2,8 @@ node_modules
 server/node_modules
 client/node_modules
 client/dist
+mobile/node_modules
+mobile/dist
 movies
 music
 streams

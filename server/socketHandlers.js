@@ -25,8 +25,26 @@ import {
   getPlaylist,
 } from './djManager.js';
 import { logger } from './logger.js';
-import { setIoRef } from './streamManager.js';
+import { setMovieBroadcast } from './streamManager.js';
 import { setOrder } from './orderStore.js';
+import {
+  getWebState,
+  playWeb,
+  pauseWeb,
+  resumeWeb,
+  seekWeb,
+  updateWebHostPosition,
+  isWebActive,
+  endWeb,
+} from './webManager.js';
+import { buildStreamProxyUrl } from './webProxy.js';
+import {
+  tomatoSearch,
+  tomatoEpisodes,
+  tomatoResolve,
+  tomatoAudioModes,
+  tomatoTrending,
+} from './tomatoBridge.js';
 
 const MAX_CHAT_HISTORY = 200;
 
@@ -40,6 +58,16 @@ const viewerHealth = new Map();
 
 let lastSeekBroadcast = 0;
 
+function streamHost(url) {
+  try {
+    const parsed = new URL(String(url));
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return parsed.hostname;
+  } catch {
+    return null;
+  }
+}
+
 function getRoom(socket) {
   return socket.data?.room || 'movie';
 }
@@ -48,19 +76,24 @@ function getRoomState(room) {
   return rooms[room] || rooms.movie;
 }
 
-function isHostSocket(socket) {
-  const room = getRoom(socket);
-  return socket.data?.isHost === true && socket.id === getRoomState(room).hostSocketId;
+function isHostSocket(socket, room = getRoom(socket)) {
+  if (socket.data?.isHost !== true) return false;
+  const hostRooms = socket.data.hostRooms || (socket.data.hostRoom ? new Set([socket.data.hostRoom]) : null);
+  if (!hostRooms || !hostRooms.has(room)) return false;
+  return socket.id === getRoomState(room).hostSocketId;
 }
 
 function isDJHostSocket(socket) {
-  return isHostSocket(socket) && getRoom(socket) === 'dj';
+  return isHostSocket(socket, 'dj');
 }
 
-function broadcastToRoom(io, room, event, data) {
+function broadcastToRoom(io, room, event, data, includeHost = false) {
   const state = getRoomState(room);
   for (const userId of state.users.keys()) {
     io.to(userId).emit(event, data);
+  }
+  if (includeHost && state.hostSocketId && !state.users.has(state.hostSocketId)) {
+    io.to(state.hostSocketId).emit(event, data);
   }
 }
 
@@ -82,19 +115,25 @@ function broadcastUsersList(io, room) {
 }
 
 export function setupSocketHandlers(io) {
-  setIoRef(io);
+  setMovieBroadcast(state => broadcastToRoom(io, 'movie', 'playbackUpdate', state, true));
 
   setInterval(() => {
     if (isStreamActive()) {
-      broadcastToRoom(io, 'movie', 'playbackUpdate', getPlaybackState());
+      broadcastToRoom(io, 'movie', 'playbackUpdate', getPlaybackState(), true);
     }
   }, 3000);
 
   setInterval(() => {
     if (isDJActive()) {
-      broadcastToRoom(io, 'dj', 'dj:playbackUpdate', getDJState());
+      broadcastToRoom(io, 'dj', 'dj:playbackUpdate', getDJState(), true);
     }
   }, 3000);
+
+  setInterval(() => {
+    if (isWebActive()) {
+      broadcastToRoom(io, 'movie', 'web:playbackUpdate', getWebState(), true);
+    }
+  }, 2000);
 
   io.on('connection', (socket) => {
     logger.info(`Client connected: ${socket.id} (transport: ${socket.conn.transport.name})`);
@@ -144,6 +183,7 @@ export function setupSocketHandlers(io) {
         userId: socket.id,
         room,
         playbackState,
+        webState: room === 'movie' ? getWebState() : undefined,
         chatHistory: state.chatHistory,
         viewerCount: state.users.size,
       });
@@ -288,7 +328,7 @@ export function setupSocketHandlers(io) {
     });
 
     socket.on('host:sync', (data) => {
-      if (!isHostSocket(socket) || getRoom(socket) !== 'movie') return;
+      if (!isHostSocket(socket, 'movie')) return;
       if (typeof data?.position === 'number') {
         updateHostPosition(data.position);
       }
@@ -302,38 +342,170 @@ export function setupSocketHandlers(io) {
     });
 
     socket.on('host:playMovie', async (data, callback) => {
-      if (!isHostSocket(socket) || getRoom(socket) !== 'movie') {
+      if (!isHostSocket(socket, 'movie')) {
         return callback?.({ error: 'Unauthorized' });
       }
       if (typeof data?.movie !== 'string' || data.movie.length === 0) {
         return callback?.({ error: 'Invalid movie' });
       }
       try {
+        endWeb();
         const state = await playMovie(data.movie, data.quality);
         logger.info(`Host playing: ${data.movie}`);
-        broadcastToRoom(io, 'movie', 'playbackUpdate', state);
+        broadcastToRoom(io, 'movie', 'playbackUpdate', state, true);
+        broadcastToRoom(io, 'movie', 'web:playbackUpdate', getWebState(), true);
         callback?.({ success: true, state });
       } catch (err) {
         callback?.({ error: err.message });
       }
     });
 
+    socket.on('web:search', async (data, callback) => {
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
+      try {
+        const result = await tomatoSearch(String(data?.q ?? ''), String(data?.source ?? 'all'));
+        callback?.({ success: true, results: Array.isArray(result.results) ? result.results : [] });
+      } catch (err) {
+        callback?.({ error: err.message });
+      }
+    });
+
+    socket.on('web:episodes', async (data, callback) => {
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
+      try {
+        const result = await tomatoEpisodes(String(data?.source ?? ''), String(data?.id ?? ''));
+        callback?.({ success: true, episodes: Array.isArray(result.episodes) ? result.episodes : [] });
+      } catch (err) {
+        callback?.({ error: err.message });
+      }
+    });
+
+    socket.on('web:audio-modes', async (data, callback) => {
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
+      try {
+        const result = await tomatoAudioModes(String(data?.source ?? ''), String(data?.id ?? ''), String(data?.ep ?? ''));
+        callback?.({ success: true, modes: Array.isArray(result.modes) ? result.modes : [] });
+      } catch (err) {
+        callback?.({ error: err.message });
+      }
+    });
+
+    socket.on('web:trending', async (_data, callback) => {
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
+      try {
+        const result = await tomatoTrending();
+        callback?.({ success: true, results: Array.isArray(result.results) ? result.results : [] });
+      } catch (err) {
+        callback?.({ error: err.message });
+      }
+    });
+
+    socket.on('web:resolve', async (data, callback) => {
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
+      try {
+        const result = await tomatoResolve(
+          String(data?.source ?? ''),
+          String(data?.id ?? ''),
+          String(data?.ep ?? ''),
+          String(data?.mode ?? 'sub')
+        );
+        const streams = (Array.isArray(result.streams) ? result.streams : [])
+          .map((stream) => {
+            const host = streamHost(stream.url);
+            if (!host) return null;
+            return {
+              ...stream,
+              proxyUrl: buildStreamProxyUrl(stream.url, {
+                hosts: [host],
+                referrer: stream.referrer,
+                origin: stream.origin,
+              }),
+            };
+          })
+          .filter(Boolean);
+        callback?.({
+          success: true,
+          streams,
+          subtitles: Array.isArray(result.subtitles) ? result.subtitles : [],
+        });
+      } catch (err) {
+        callback?.({ error: err.message });
+      }
+    });
+
+    socket.on('web:play', (data, callback) => {
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
+      try {
+        endPlayback();
+        const state = playWeb(data);
+        logger.info(`Host playing web stream: ${state.web?.title ?? ''}`);
+        broadcastToRoom(io, 'movie', 'web:playbackUpdate', state, true);
+        callback?.({ success: true, state });
+      } catch (err) {
+        callback?.({ error: err.message });
+      }
+    });
+
+    socket.on('web:pause', (_data, callback) => {
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
+      const state = pauseWeb();
+      broadcastToRoom(io, 'movie', 'web:playbackUpdate', state, true);
+      callback?.({ success: true, state });
+    });
+
+    socket.on('web:resume', (_data, callback) => {
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
+      const state = resumeWeb();
+      broadcastToRoom(io, 'movie', 'web:playbackUpdate', state, true);
+      callback?.({ success: true, state });
+    });
+
+    socket.on('web:seek', (data, callback) => {
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
+      if (typeof data?.time !== 'number' || !Number.isFinite(data.time) || data.time < 0) {
+        return callback?.({ error: 'Invalid time' });
+      }
+      const state = seekWeb(data.time);
+      broadcastToRoom(io, 'movie', 'web:playbackUpdate', state, true);
+      callback?.({ success: true, state });
+    });
+
+    socket.on('web:ended', (_data, callback) => {
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
+      const state = endWeb();
+      broadcastToRoom(io, 'movie', 'web:playbackUpdate', state, true);
+      callback?.({ success: true, state });
+    });
+
+    socket.on('web:resync', (_data, callback) => {
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
+      broadcastToRoom(io, 'movie', 'web:playbackUpdate', { ...getWebState(), forceResync: true }, true);
+      callback?.({ success: true });
+    });
+
+    socket.on('web:sync', (data) => {
+      if (!isHostSocket(socket, 'movie')) return;
+      if (typeof data?.position === 'number') {
+        updateWebHostPosition(data.position);
+      }
+    });
+
     socket.on('host:pause', (_data, callback) => {
-      if (!isHostSocket(socket) || getRoom(socket) !== 'movie') return callback?.({ error: 'Unauthorized' });
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
       pausePlayback();
-      broadcastToRoom(io, 'movie', 'playbackUpdate', getPlaybackState());
+      broadcastToRoom(io, 'movie', 'playbackUpdate', getPlaybackState(), true);
       callback?.({ success: true, state: getPlaybackState() });
     });
 
     socket.on('host:resume', (_data, callback) => {
-      if (!isHostSocket(socket) || getRoom(socket) !== 'movie') return callback?.({ error: 'Unauthorized' });
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
       resumePlayback();
-      broadcastToRoom(io, 'movie', 'playbackUpdate', getPlaybackState());
+      broadcastToRoom(io, 'movie', 'playbackUpdate', getPlaybackState(), true);
       callback?.({ success: true, state: getPlaybackState() });
     });
 
     socket.on('host:seek', (data, callback) => {
-      if (!isHostSocket(socket) || getRoom(socket) !== 'movie') return callback?.({ error: 'Unauthorized' });
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
       if (typeof data?.time !== 'number' || !Number.isFinite(data.time) || data.time < 0) {
         return callback?.({ error: 'Invalid time' });
       }
@@ -341,24 +513,24 @@ export function setupSocketHandlers(io) {
       const now = Date.now();
       if (now - lastSeekBroadcast > 500) {
         lastSeekBroadcast = now;
-        broadcastToRoom(io, 'movie', 'playbackUpdate', getPlaybackState());
+        broadcastToRoom(io, 'movie', 'playbackUpdate', getPlaybackState(), true);
       }
       callback?.({ success: true, state: getPlaybackState() });
     });
 
     socket.on('host:ended', (_data, callback) => {
-      if (!isHostSocket(socket) || getRoom(socket) !== 'movie') return callback?.({ error: 'Unauthorized' });
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
       if (!isStreamActive()) return callback?.({ success: true });
       const state = endPlayback();
-      broadcastToRoom(io, 'movie', 'playbackUpdate', state);
+      broadcastToRoom(io, 'movie', 'playbackUpdate', state, true);
       callback?.({ success: true, state });
     });
 
     socket.on('movie:setOrder', (data, callback) => {
-      if (!isHostSocket(socket) || getRoom(socket) !== 'movie') return callback?.({ error: 'Unauthorized' });
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
       try {
         const order = setOrder('movie', data?.order);
-        broadcastToRoom(io, 'movie', 'orderUpdate', { room: 'movie', order });
+        broadcastToRoom(io, 'movie', 'orderUpdate', { room: 'movie', order }, true);
         callback?.({ success: true, order });
       } catch (err) {
         callback?.({ error: err.message });
@@ -366,7 +538,7 @@ export function setupSocketHandlers(io) {
     });
 
     socket.on('host:forceQuality', (data, callback) => {
-      if (!isHostSocket(socket) || getRoom(socket) !== 'movie') return callback?.({ error: 'Unauthorized' });
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
       const quality = data?.quality;
       if (!isValidQuality(quality)) return callback?.({ error: 'Invalid quality' });
       if (data.targetUserId !== undefined && typeof data.targetUserId !== 'string') {
@@ -381,7 +553,7 @@ export function setupSocketHandlers(io) {
     });
 
     socket.on('host:qualityChange', (data) => {
-      if (!isHostSocket(socket) || getRoom(socket) !== 'movie') return;
+      if (!isHostSocket(socket, 'movie')) return;
       if (!isValidQuality(data?.quality)) return;
       broadcastToRoom(io, 'movie', 'qualityChange', { quality: data.quality });
     });
@@ -394,7 +566,7 @@ export function setupSocketHandlers(io) {
       try {
         const state = await playTrack(data.track);
         logger.info(`DJ playing: ${data.track}`);
-        broadcastToRoom(io, 'dj', 'dj:playbackUpdate', state);
+        broadcastToRoom(io, 'dj', 'dj:playbackUpdate', state, true);
         broadcastToRoom(io, 'dj', 'dj:trackChange', { track: data.track });
         callback?.({ success: true, state });
       } catch (err) {
@@ -405,14 +577,14 @@ export function setupSocketHandlers(io) {
     socket.on('dj:pause', (_data, callback) => {
       if (!isDJHostSocket(socket)) return callback?.({ error: 'Unauthorized' });
       djPause();
-      broadcastToRoom(io, 'dj', 'dj:playbackUpdate', getDJState());
+      broadcastToRoom(io, 'dj', 'dj:playbackUpdate', getDJState(), true);
       callback?.({ success: true, state: getDJState() });
     });
 
     socket.on('dj:resume', (_data, callback) => {
       if (!isDJHostSocket(socket)) return callback?.({ error: 'Unauthorized' });
       djResume();
-      broadcastToRoom(io, 'dj', 'dj:playbackUpdate', getDJState());
+      broadcastToRoom(io, 'dj', 'dj:playbackUpdate', getDJState(), true);
       callback?.({ success: true, state: getDJState() });
     });
 
@@ -422,14 +594,14 @@ export function setupSocketHandlers(io) {
         return callback?.({ error: 'Invalid time' });
       }
       djSeek(data.time);
-      broadcastToRoom(io, 'dj', 'dj:playbackUpdate', getDJState());
+      broadcastToRoom(io, 'dj', 'dj:playbackUpdate', getDJState(), true);
       callback?.({ success: true, state: getDJState() });
     });
 
     socket.on('dj:ended', (_data, callback) => {
       if (!isDJHostSocket(socket)) return callback?.({ error: 'Unauthorized' });
       const state = djEnd();
-      broadcastToRoom(io, 'dj', 'dj:playbackUpdate', state);
+      broadcastToRoom(io, 'dj', 'dj:playbackUpdate', state, true);
       callback?.({ success: true, state });
     });
 
@@ -441,7 +613,7 @@ export function setupSocketHandlers(io) {
       if (!isDJHostSocket(socket)) return callback?.({ error: 'Unauthorized' });
       try {
         const order = setOrder('dj', data?.order);
-        broadcastToRoom(io, 'dj', 'orderUpdate', { room: 'dj', order });
+        broadcastToRoom(io, 'dj', 'orderUpdate', { room: 'dj', order }, true);
         callback?.({ success: true, order });
       } catch (err) {
         callback?.({ error: err.message });
@@ -458,7 +630,8 @@ export function setupSocketHandlers(io) {
             io.to(state.hostSocketId).emit('host:revoked');
           }
           socket.data.isHost = true;
-          socket.data.hostRoom = 'dj';
+          if (!socket.data.hostRooms) socket.data.hostRooms = new Set();
+          socket.data.hostRooms.add(room);
           state.hostSocketId = socket.id;
           const user = state.users.get(socket.id);
           if (user) user.isHost = true;
@@ -475,7 +648,8 @@ export function setupSocketHandlers(io) {
             io.to(state.hostSocketId).emit('host:revoked');
           }
           socket.data.isHost = true;
-          socket.data.hostRoom = 'movie';
+          if (!socket.data.hostRooms) socket.data.hostRooms = new Set();
+          socket.data.hostRooms.add(room);
           state.hostSocketId = socket.id;
           const user = state.users.get(socket.id);
           if (user) user.isHost = true;
@@ -519,7 +693,7 @@ export function setupSocketHandlers(io) {
     });
 
     socket.on('host:reactions:toggle', (data, callback) => {
-      if (!isHostSocket(socket)) return callback?.({ error: 'Unauthorized' });
+      if (!isHostSocket(socket, getRoom(socket))) return callback?.({ error: 'Unauthorized' });
       const room = getRoom(socket);
       const state = getRoomState(room);
       state.reactionsEnabled = data?.enabled !== false;
@@ -528,23 +702,23 @@ export function setupSocketHandlers(io) {
     });
 
     socket.on('host:refreshMovies', async (data, callback) => {
-      if (!isHostSocket(socket) || getRoom(socket) !== 'movie') return callback?.({ error: 'Unauthorized' });
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
       const movies = await getMovieList();
-      broadcastToRoom(io, 'movie', 'movies:updated', movies);
+      broadcastToRoom(io, 'movie', 'movies:updated', movies, true);
       callback?.({ success: true, count: movies.length });
     });
 
     socket.on('host:resync', (_data, callback) => {
-      if (!isHostSocket(socket) || getRoom(socket) !== 'movie') return callback?.({ error: 'Unauthorized' });
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
       const state = getPlaybackState();
-      broadcastToRoom(io, 'movie', 'playbackUpdate', { ...state, forceResync: true });
+      broadcastToRoom(io, 'movie', 'playbackUpdate', { ...state, forceResync: true }, true);
       callback?.({ success: true });
     });
 
     socket.on('dj:resync', (_data, callback) => {
       if (!isDJHostSocket(socket)) return callback?.({ error: 'Unauthorized' });
       const state = getDJState();
-      broadcastToRoom(io, 'dj', 'dj:playbackUpdate', { ...state, forceResync: true });
+      broadcastToRoom(io, 'dj', 'dj:playbackUpdate', { ...state, forceResync: true }, true);
       callback?.({ success: true });
     });
   });

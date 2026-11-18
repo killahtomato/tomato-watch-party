@@ -19,12 +19,17 @@ cp .env.example .env
 echo "HOST_PASSWORD=$(openssl rand -base64 24)" >> .env
 echo "JWT_SECRET=$(openssl rand -hex 32)" >> .env
 
-# 2. Start the server
+# 2. Fetch the tomato-play submodule (web search/streaming)
+git submodule update --init --recursive
+
+# 3. Start the server
 ./twp-start
 
-# 3. Open in browser
+# 4. Open in browser
 open http://localhost:3000
 ```
+
+If you cloned with `git clone --recursive`, step 2 is already done.
 
 ## Helper Scripts
 
@@ -39,6 +44,7 @@ open http://localhost:3000
 ## Features
 
 - **Synchronized playback** — Host controls play, pause, seek; audience syncs automatically
+- **Web streaming** — Host-only web search and streaming from anime providers via the bundled tomato-play CLI; the audience watches the same synced room
 - **Audio track switching** — Per-user audio track selection (dual audio support)
 - **Subtitle selection** — Per-user subtitle track selection with WebVTT overlay
 - **Quality selection** — 1080p, 720p, 480p with auto-switch on poor connection
@@ -53,6 +59,7 @@ open http://localhost:3000
 
 - Node.js 18+
 - FFmpeg (with hardware encoder optional)
+- `bash` and `curl` (for the tomato-play web streaming submodule)
 - cloudflared (optional, for remote sharing)
 
 ## Configuration
@@ -66,6 +73,38 @@ echo "JWT_SECRET=$(openssl rand -hex 32)" >> .env
 ```
 
 The server refuses to start while `HOST_PASSWORD` or `JWT_SECRET` is unset or still a default value. `MOVIE_DIR`, `MUSIC_DIR`, and `STREAM_DIR` default to `./movies`, `./music`, and `./streams`; set them to absolute paths for remote sharing. The DJ room reads its track list from `MUSIC_DIR`.
+
+## Web Streaming (tomato-play)
+
+The host can search and stream from tomato-play's anime providers without leaving the watch party. Open the **🌐 Web** tab in the host controls, search, pick a series and episode, choose sub/dub and quality, then press Play. The stream plays in the movie room and the audience syncs exactly like a local movie — chat, throws, reactions, and the viewer list all keep working.
+
+- Host-only: search and playback controls require the movie-room host password.
+- The audience never runs tomato-play. The server resolves the stream and serves it through a same-origin proxy, so viewers just load a normal HLS URL.
+- Streams are ephemeral: nothing is added to the local movie library and no watch position is stored.
+- Live streams play without a seek bar; VOD seeking works like a local movie.
+
+Setup:
+
+```bash
+git submodule update --init --recursive
+```
+
+Enable it in `.env`:
+
+```bash
+TOMATOPLAY_ENABLED=1
+TOMATOPLAY_BIN=server/vendor/tomato-play/tomatoplay
+```
+
+`TOMATOPLAY_BIN` is resolved relative to the project root when it is not absolute. The server logs `tomato-play integration ready` at startup, or a warning when the binary is missing (the Web tab is hidden in that case).
+
+The bundled tomato-play is a git submodule. Its `.gitmodules` URL is currently a local path (`/home/tomato/Work/tomato-play`); change it to the GitHub URL before sharing this repository:
+
+```bash
+git submodule set-url server/vendor/tomato-play https://github.com/killahtomato/tomato-play.git
+```
+
+The submodule is GPLv3 and this project is MIT. That is fine for private/local use, but a distributed combined work must be licensed under GPLv3.
 
 ## Transcoding
 
@@ -96,6 +135,23 @@ The script installs dependencies if missing, starts the server, launches cloudfl
 
 The tunnel URL is public. Use a strong `HOST_PASSWORD`, keep `JWT_SECRET` secret, and avoid posting the URL publicly. For anything beyond a private party, put the tunnel behind Cloudflare Access or another access-control layer.
 
+## Mobile Site
+
+A dedicated mobile site is served at `/m` for phones and tablets. Visitors opening the main link on a mobile browser are redirected there automatically; a "Mobile site" link in the corner of the desktop site and a "Switch to desktop site" button on mobile let you change versions manually.
+
+The mobile site is audience-only: watch the movie or DJ set, chat, throw, react, and adjust volume, quality, audio track, and subtitles. Hosting stays on the desktop site.
+
+To develop or build the mobile app:
+
+```bash
+npm run dev:mobile     # Vite dev server on http://localhost:5174
+npm run build:mobile   # production build into mobile/dist
+```
+
+The mobile app is a PWA: on mobile browsers you can add it to your home screen and it opens full-screen.
+
+Mobile viewers pick their audio track with a server-side remux, cached in `streams/_remux`. The server pre-warms the alternate tracks when a movie starts, so switching is usually instant; the cache can be deleted to reclaim disk space.
+
 ## Docker
 
 ```bash
@@ -109,4 +165,5 @@ Both `HOST_PASSWORD` and `JWT_SECRET` must be set; the container refuses to star
 - **Backend** — Node.js + Express + Socket.io
 - **Frontend** — React + Vite
 - **Transcoding** — FFmpeg with hardware acceleration auto-detection
+- **Web streaming** — tomato-play CLI submodule + hls.js, served through a same-origin HLS proxy
 - **Sync** — Server-authoritative position with 2-second broadcast + drift correction

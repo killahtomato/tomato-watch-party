@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-export default function AudioVisualizer({ audioRef, isPlaying }) {
+export default function AudioVisualizer({ audioRef, isPlaying, unlocked = true }) {
   const canvasRef = useRef(null);
   const audioCtxRef = useRef(null);
   const analyserRef = useRef(null);
@@ -92,6 +92,12 @@ export default function AudioVisualizer({ audioRef, isPlaying }) {
       audioCtx.close().catch(() => {});
     };
   }, [audioRef]);
+
+  useEffect(() => {
+    const audioCtx = audioCtxRef.current;
+    if (!audioCtx) return;
+    if (unlocked) audioCtx.resume().catch(() => {});
+  }, [unlocked]);
 
   useEffect(() => {
     const audioCtx = audioCtxRef.current;

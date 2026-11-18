@@ -13,6 +13,9 @@ RUN cd server && npm install --production
 COPY client/ ./client/
 RUN cd client && npm install && npm run build
 
+COPY mobile/ ./mobile/
+RUN cd mobile && npm install && npm run build
+
 ENV NODE_ENV=production
 ENV PORT=3000
 

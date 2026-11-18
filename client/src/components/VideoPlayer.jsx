@@ -155,6 +155,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
           });
           return;
         }
+        emit('host:pause', {});
       }
       setMovieEnded(true);
     };

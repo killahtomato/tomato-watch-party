@@ -28,6 +28,14 @@ if [ ! -d "client/node_modules" ]; then
   cd client && npm install && npm run build && cd ..
 fi
 
+if [ ! -d "mobile/node_modules" ]; then
+  echo "Installing mobile dependencies..."
+  cd mobile && npm install && cd ..
+fi
+
+echo "Building mobile..."
+cd mobile && npm run build && cd ..
+
 # Check cloudflared
 if ! command -v cloudflared &>/dev/null; then
   echo "cloudflared not found. Install from https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/"

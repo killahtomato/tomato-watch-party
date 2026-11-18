@@ -21,6 +21,8 @@ import {
 } from './streamManager.js';
 import { getAudioFileList } from './djManager.js';
 import { getOrder } from './orderStore.js';
+import { handleWebStream } from './webProxy.js';
+import { logTomatoStatus } from './tomatoBridge.js';
 import { existsSync, mkdirSync, readFileSync } from 'fs';
 import { logger } from './logger.js';
 import { execFile } from 'child_process';
@@ -91,7 +93,50 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json());
+
+const MOBILE_DIST = join(__dirname, '..', 'mobile', 'dist');
+const MOBILE_UA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|CriOS|FxiOS/i;
+
+function parseCookies(req) {
+  const header = req.headers.cookie;
+  const cookies = {};
+  if (!header) return cookies;
+  for (const part of header.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx > -1) cookies[part.slice(0, idx).trim()] = decodeURIComponent(part.slice(idx + 1).trim());
+  }
+  return cookies;
+}
+
+app.use((req, res, next) => {
+  if (req.method !== 'GET') return next();
+  const path = req.path;
+  if (
+    path.startsWith('/m') ||
+    path.startsWith('/api') ||
+    path.startsWith('/stream') ||
+    path.startsWith('/socket.io') ||
+    path.startsWith('/assets')
+  ) {
+    return next();
+  }
+  if (path !== '/' && path !== '/index.html') return next();
+
+  if (req.query.desktop === '1') {
+    res.setHeader('Set-Cookie', 'desktop=1; Path=/; Max-Age=31536000; SameSite=Lax');
+  }
+  const wantsDesktop = req.query.desktop === '1' || parseCookies(req).desktop === '1';
+  const isMobile = MOBILE_UA.test(req.headers['user-agent'] || '');
+
+  if (isMobile && !wantsDesktop) {
+    return res.redirect('/m');
+  }
+  next();
+});
+
 app.use(express.static(join(__dirname, '..', 'client', 'dist')));
+app.use('/m', express.static(MOBILE_DIST));
+app.get('/m', (req, res) => res.sendFile(join(MOBILE_DIST, 'index.html')));
 
 const loginAttempts = new Map();
 const LOGIN_RATE_MAX = 5;
@@ -218,7 +263,10 @@ app.get('/api/audio-file/:track', (req, res) => {
   res.sendFile(trackPath);
 });
 
+app.get('/api/web/stream', handleWebStream);
+
 await initCache();
+logTomatoStatus();
 setupSocketHandlers(io);
 
 app.get('/api/movie/:name/tracks', async (req, res) => {

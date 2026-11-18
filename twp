@@ -13,8 +13,16 @@ if [ ! -d "client/node_modules" ]; then
   cd client && npm install && cd ..
 fi
 
+if [ ! -d "mobile/node_modules" ]; then
+  echo "Installing mobile dependencies..."
+  cd mobile && npm install && cd ..
+fi
+
 echo "Building client..."
 cd client && npm run build && cd ..
+
+echo "Building mobile..."
+cd mobile && npm run build && cd ..
 
 echo "Starting Movie Stream server..."
 cd server && node index.js

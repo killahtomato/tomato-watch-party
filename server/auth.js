@@ -44,3 +44,27 @@ export function verifyHostPassword(password) {
   const expected = Buffer.from(HOST_PASSWORD);
   return provided.length === expected.length && crypto.timingSafeEqual(provided, expected);
 }
+
+export function issueStreamToken({ hosts, referrer = '', origin = '' }, expiresIn = '15m') {
+  const cleanHosts = [...new Set((Array.isArray(hosts) ? hosts : []).map(String).filter(Boolean))].slice(0, 50);
+  return jwt.sign({
+    role: 'stream',
+    hosts: cleanHosts,
+    referrer: String(referrer).slice(0, 500),
+    origin: String(origin).slice(0, 500),
+  }, JWT_SECRET, { expiresIn });
+}
+
+export function verifyStreamToken(token) {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded.role !== 'stream' || !Array.isArray(decoded.hosts)) return null;
+    return {
+      hosts: decoded.hosts.map(String),
+      referrer: decoded.referrer ? String(decoded.referrer) : '',
+      origin: decoded.origin ? String(decoded.origin) : '',
+    };
+  } catch {
+    return null;
+  }
+}

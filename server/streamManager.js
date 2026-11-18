@@ -69,19 +69,19 @@ export function safeJoin(base, ...parts) {
   return resolved;
 }
 
-let ioRef = null;
+let movieBroadcast = null;
 let config = { showForceQualityToast: true, showAutoRaiseToast: true };
 let syncInterval = null;
 
-export function setIoRef(io) {
-  ioRef = io;
+export function setMovieBroadcast(fn) {
+  movieBroadcast = fn;
 }
 
 function startSyncBroadcast() {
   if (syncInterval) return;
   syncInterval = setInterval(() => {
-    if (ioRef && isPlaying) {
-      ioRef.emit('playbackUpdate', getPlaybackState());
+    if (movieBroadcast && isPlaying) {
+      movieBroadcast(getPlaybackState());
     }
   }, 2000);
 }
@@ -258,8 +258,37 @@ export async function remuxForTracks(movieName, quality, audioIdx, subIdx) {
     '-y', remuxPath
   );
 
-  await execFileAsync('ffmpeg', args);
+  await new Promise((resolve, reject) => {
+    const proc = spawn('ffmpeg', args);
+    let stderr = '';
+    proc.stderr?.on('data', (d) => {
+      stderr += d.toString();
+      if (stderr.length > 20000) stderr = stderr.slice(-20000);
+    });
+    proc.on('exit', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-300)}`));
+    });
+    proc.on('error', reject);
+  });
+
   return remuxPath;
+}
+
+export async function prewarmAudioTracks(movieName, quality) {
+  try {
+    const moviePath = join(MOVIE_DIR, movieName);
+    const { stdout } = await execFileAsync('ffprobe', [
+      '-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index', '-of', 'csv=p=0', moviePath
+    ]);
+    const count = stdout.trim().split(/\r?\n/).filter(Boolean).length;
+    const limit = Math.min(count, 5);
+    for (let i = 1; i < limit; i++) {
+      await remuxForTracks(movieName, quality, i, -1).catch(() => {});
+    }
+  } catch (err) {
+    logger.debug(`Audio prewarm failed for ${movieName}: ${err.message}`);
+  }
 }
 
 function buildTranscodeArgs(moviePath, outputPath, quality) {
@@ -437,6 +466,7 @@ export async function playMovie(movieName, quality) {
     currentMovie = movieName;
     resetPlaybackKeepCache();
     deriveQualitiesInBackground(movieName, streamPath);
+    prewarmAudioTracks(movieName, effectiveQuality);
     return getPlaybackState();
   }
 
@@ -450,6 +480,7 @@ export async function playMovie(movieName, quality) {
     saveMeta(streamPath, sourceStat, true);
     currentMovie = movieName;
     resetPlaybackState();
+    prewarmAudioTracks(movieName, effectiveQuality);
     return getPlaybackState();
   }
 
@@ -490,9 +521,10 @@ export async function playMovie(movieName, quality) {
         transcodeProgress = 100;
         saveMeta(streamPath, sourceStat, true);
         deriveQualitiesInBackground(movieName, streamPath);
+        prewarmAudioTracks(movieName, effectiveQuality);
       }
       streamProcess = null;
-      ioRef?.emit('playbackUpdate', getPlaybackState());
+      movieBroadcast?.(getPlaybackState());
     });
 
     streamProcess.on('error', (err) => {

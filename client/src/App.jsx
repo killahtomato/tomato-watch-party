@@ -4,6 +4,8 @@ import NameEntry from './components/NameEntry.jsx';
 import VideoPlayer from './components/VideoPlayer.jsx';
 import Chat from './components/Chat.jsx';
 import HostControls from './components/HostControls.jsx';
+import WebPlayer from './components/WebPlayer.jsx';
+import WebHostControls from './components/WebHostControls.jsx';
 import DJRoom from './components/DJRoom.jsx';
 import RoomSwitcher from './components/RoomSwitcher.jsx';
 import { applyOrder } from './utils/order.js';
@@ -31,6 +33,8 @@ export default function App() {
   const djPauseRef = useRef(null);
   const [djPlaybackPercent, setDJPlaybackPercent] = useState(0);
   const [movies, setMovies] = useState([]);
+  const [webState, setWebState] = useState(null);
+  const [webProgress, setWebProgress] = useState({ current: 0, duration: 0, live: false });
 
   const handleSeekPercent = useCallback((pct) => {
     setPlaybackPercent(pct);
@@ -66,6 +70,7 @@ export default function App() {
       setJoining(false);
       setJoinError(null);
       if (data.room) setCurrentRoom(data.room);
+      if (data.webState) setWebState(data.webState);
     });
 
     const unsubViewerCount = on('viewerCount', (count) => {
@@ -93,6 +98,10 @@ export default function App() {
       setSessionData(prev => ({ ...prev, playbackState: state }));
     });
 
+    const unsubWeb = on('web:playbackUpdate', (state) => {
+      setWebState(state);
+    });
+
     return () => {
       unsubJoined?.();
       unsubViewerCount?.();
@@ -100,6 +109,7 @@ export default function App() {
       unsubJoinError?.();
       unsubUsersList?.();
       unsubPlayback?.();
+      unsubWeb?.();
     };
   }, [on, emit]);
 
@@ -225,20 +235,44 @@ export default function App() {
 
       <div className="main-area">
         <div className={`room-pane movie-pane ${currentRoom === 'movie' ? 'active' : 'inactive'}`}>
-          <VideoPlayer
-            userName={userName}
-            isHost={isHost}
-            emit={emit}
-            on={on}
-            sessionData={sessionData}
-            onTimeUpdate={setPlaybackPercent}
-            seekRef={seekRef}
-            playRef={playRef}
-            pauseRef={pauseRef}
-            isActive={currentRoom === 'movie'}
-            movies={movies}
-          />
-          {isHost && (
+          {webState?.web ? (
+            <WebPlayer
+              userId={sessionData?.userId}
+              isHost={isHost}
+              emit={emit}
+              on={on}
+              webState={webState}
+              seekRef={seekRef}
+              playRef={playRef}
+              pauseRef={pauseRef}
+              isActive={currentRoom === 'movie'}
+              onProgress={setWebProgress}
+            />
+          ) : (
+            <VideoPlayer
+              userName={userName}
+              isHost={isHost}
+              emit={emit}
+              on={on}
+              sessionData={sessionData}
+              onTimeUpdate={setPlaybackPercent}
+              seekRef={seekRef}
+              playRef={playRef}
+              pauseRef={pauseRef}
+              isActive={currentRoom === 'movie'}
+              movies={movies}
+            />
+          )}
+          {isHost && (webState?.web ? (
+            <WebHostControls
+              emit={emit}
+              webState={webState}
+              seekRef={seekRef}
+              playRef={playRef}
+              pauseRef={pauseRef}
+              progress={webProgress}
+            />
+          ) : (
             <HostControls
               emit={emit}
               on={on}
@@ -250,7 +284,7 @@ export default function App() {
               movies={movies}
               onReorderMovies={handleReorderMovies}
             />
-          )}
+          ))}
         </div>
         <div className={`room-pane dj-pane ${currentRoom === 'dj' ? 'active' : 'inactive'}`}>
           <DJRoom
@@ -271,7 +305,12 @@ export default function App() {
       </div>
 
       <div className="sidebar">
-        {currentRoom === 'movie' && sessionData?.playbackState?.movie && (
+        {currentRoom === 'movie' && webState?.web && (
+          <div className="now-playing-banner">
+            <strong>{webState.web.title}</strong>
+          </div>
+        )}
+        {currentRoom === 'movie' && !webState?.web && sessionData?.playbackState?.movie && (
           <div className="now-playing-banner">
             <strong>{sessionData.playbackState.movie.replace(/\.[^.]+$/, '')}</strong>
           </div>
@@ -331,6 +370,8 @@ export default function App() {
       <div className={`viewer-panel-tab${viewerPanelOpen ? ' open' : ''}`} onClick={() => setViewerPanelOpen(o => !o)}>
         👥
       </div>
+
+      <a className="mobile-site-link" href="/m">Mobile site</a>
 
       <div className={`viewer-panel${viewerPanelOpen ? ' open' : ''}`}>
         <div className="viewer-panel-header">

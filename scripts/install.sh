@@ -37,6 +37,7 @@ rsync -a \
   --exclude='streams' \
   --exclude='hls' \
   --exclude='node_modules' \
+  --exclude='mobile/dist' \
   --exclude='.git' \
   --exclude='.env' \
   --exclude='*.log' \
@@ -49,6 +50,7 @@ echo "Installing Node.js dependencies..."
 npm install --production
 cd server && npm install --production && cd ..
 cd client && npm install && npm run build && cd ..
+cd mobile && npm install && npm run build && cd ..
 
 # Setup directories
 mkdir -p "$INSTALL_DIR/movies" "$INSTALL_DIR/music" "$INSTALL_DIR/streams"

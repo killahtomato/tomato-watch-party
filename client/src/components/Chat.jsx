@@ -124,6 +124,7 @@ export default function Chat({ userName, emit, on, sessionData }) {
           onChange={(e) => setInput(e.target.value)}
           placeholder="Type a message..."
           maxLength={500}
+          enterKeyHint="send"
         />
         <button type="submit" disabled={!input.trim()}>
           Send
