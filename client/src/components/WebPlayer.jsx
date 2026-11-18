@@ -233,10 +233,6 @@ export default function WebPlayer({
   }, [isActive, isMuted]);
 
   useEffect(() => {
-    if (videoRef.current) videoRef.current.volume = 0;
-  }, [proxyUrl]);
-
-  useEffect(() => {
     const timers = {};
     throws.forEach((t) => {
       if (!splattering[t.id]) {
