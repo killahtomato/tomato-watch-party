@@ -1,0 +1,3 @@
+[submodule "server/vendor/tomato-play"]
+	path = server/vendor/tomato-play
+	url = /home/tomato/Work/tomato-play
