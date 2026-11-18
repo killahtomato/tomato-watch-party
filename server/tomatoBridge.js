@@ -51,6 +51,15 @@ function getProbeTimeoutMs() {
   return Number.isFinite(value) && value > 0 ? value : 180000;
 }
 
+function getExcludedSources() {
+  return new Set(
+    (process.env.TOMATOPLAY_EXCLUDE_SOURCES || 'miruro')
+      .split(',')
+      .map((source) => source.trim())
+      .filter(Boolean)
+  );
+}
+
 function isAvailable() {
   return isEnabled() && existsSync(getBin());
 }
@@ -213,7 +222,10 @@ export function tomatoStatus() {
 }
 
 export async function tomatoSearch(query, source = 'all') {
-  return runJson('search', [query, source]);
+  const data = await runJson('search', [query, source]);
+  const excluded = getExcludedSources();
+  if (excluded.size === 0 || !Array.isArray(data.results)) return data;
+  return { ...data, results: data.results.filter((entry) => !excluded.has(entry.source)) };
 }
 
 export async function tomatoEpisodes(source, id) {
