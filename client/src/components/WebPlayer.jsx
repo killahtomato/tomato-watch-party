@@ -2,6 +2,28 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import Hls from 'hls.js';
 import ThrowButton from './ThrowButton.jsx';
 
+function parseVtt(text) {
+  const lines = text.trim().split(/\r?\n/);
+  const entries = [];
+  let current = null;
+  for (const line of lines) {
+    const timeMatch = line.match(/^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})[.,](\d{1,3})\s*-->\s*(?:(\d{1,2}):)?(\d{1,2}):(\d{2})[.,](\d{1,3})/);
+    if (timeMatch) {
+      if (current && current.text) entries.push(current);
+      const h1 = timeMatch[1] ? parseInt(timeMatch[1]) : 0;
+      const start = h1 * 3600 + parseInt(timeMatch[2]) * 60 + parseInt(timeMatch[3]) + parseInt(timeMatch[4].padEnd(3, '0')) / 1000;
+      const h2 = timeMatch[5] ? parseInt(timeMatch[5]) : 0;
+      const end = h2 * 3600 + parseInt(timeMatch[6]) * 60 + parseInt(timeMatch[7]) + parseInt(timeMatch[8].padEnd(3, '0')) / 1000;
+      current = { start, end, text: '' };
+    } else if (current && line.trim() && !line.startsWith('WEBVTT') && !line.startsWith('NOTE') && !line.match(/^\d+$/)) {
+      const cleanLine = line.replace(/<[^>]+>/g, '').trim();
+      if (cleanLine) current.text += (current.text ? '\n' : '') + cleanLine;
+    }
+  }
+  if (current && current.text) entries.push(current);
+  return entries;
+}
+
 export default function WebPlayer({
   userId,
   isHost,
@@ -27,6 +49,8 @@ export default function WebPlayer({
   const [videoEnded, setVideoEnded] = useState(false);
   const [bufferHealth, setBufferHealth] = useState(0);
   const [pingMs, setPingMs] = useState(0);
+  const [subEntries, setSubEntries] = useState([]);
+  const [currentSubText, setCurrentSubText] = useState('');
 
   const stream = webState?.web || null;
   const proxyUrl = stream?.proxyUrl || null;
@@ -79,6 +103,34 @@ export default function WebPlayer({
       if (hls) hls.destroy();
     };
   }, [proxyUrl, isHls]);
+
+  useEffect(() => {
+    const subs = stream?.subtitles || [];
+    const subtitleUrl = subs[0]?.proxyUrl;
+    if (!subtitleUrl) {
+      setSubEntries([]);
+      setCurrentSubText('');
+      return undefined;
+    }
+    let cancelled = false;
+    fetch(subtitleUrl)
+      .then((response) => response.text())
+      .then((text) => { if (!cancelled) setSubEntries(parseVtt(text)); })
+      .catch(() => { if (!cancelled) setSubEntries([]); });
+    return () => { cancelled = true; };
+  }, [stream?.subtitles, stream?.proxyUrl]);
+
+  useEffect(() => {
+    if (subEntries.length === 0) { setCurrentSubText(''); return undefined; }
+    const interval = setInterval(() => {
+      const video = videoRef.current;
+      if (!video) return;
+      const t = video.currentTime;
+      const entry = subEntries.find((e) => t >= e.start && t <= e.end);
+      setCurrentSubText(entry ? entry.text : '');
+    }, 100);
+    return () => clearInterval(interval);
+  }, [subEntries]);
 
   useEffect(() => {
     if (!isHost) return;
@@ -323,6 +375,12 @@ export default function WebPlayer({
           </div>
         ))}
       </div>
+
+      {currentSubText && (
+        <div className="subtitle-overlay">
+          <span>{currentSubText}</span>
+        </div>
+      )}
 
       <style>{`
         video::-webkit-media-controls { display: none !important; }

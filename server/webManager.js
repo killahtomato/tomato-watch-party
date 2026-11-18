@@ -74,6 +74,13 @@ function normalizeDescriptor(descriptor) {
     proxyUrl,
     referrer: descriptor.referrer ? String(descriptor.referrer).slice(0, 500) : '',
     origin: descriptor.origin ? String(descriptor.origin).slice(0, 500) : '',
+    subtitles: Array.isArray(descriptor.subtitles)
+      ? descriptor.subtitles.slice(0, 5).map((sub) => ({
+        lang: String(sub?.lang || 'und').slice(0, 20),
+        url: String(sub?.url || '').slice(0, 500),
+        proxyUrl: String(sub?.proxyUrl || '').slice(0, 1000),
+      })).filter((sub) => sub.url && sub.proxyUrl.startsWith('/api/web/stream'))
+      : [],
     live: descriptor.live === true,
   };
 }

@@ -188,6 +188,7 @@ export default function WebSearchPanel({ emit, isHost, onPlay }) {
       proxyUrl: stream.proxyUrl,
       referrer: stream.referrer,
       origin: stream.origin,
+      subtitles: resolved.subtitles || [],
       live: false,
     });
   }, [selectedResult, selectedEpisode, resolved, selectedQuality, mode, onPlay]);

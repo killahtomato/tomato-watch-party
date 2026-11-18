@@ -438,11 +438,21 @@ export function setupSocketHandlers(io) {
             };
           })
           .filter(Boolean);
-        callback?.({
-          success: true,
-          streams,
-          subtitles: Array.isArray(result.subtitles) ? result.subtitles : [],
-        });
+        const subtitles = (Array.isArray(result.subtitles) ? result.subtitles : [])
+          .map((sub) => {
+            const host = streamHost(sub.url);
+            if (!host) return null;
+            return {
+              ...sub,
+              proxyUrl: buildStreamProxyUrl(sub.url, {
+                hosts: [host],
+                referrer: result.referrer,
+                origin: result.origin,
+              }),
+            };
+          })
+          .filter(Boolean);
+        callback?.({ success: true, streams, subtitles });
       } catch (err) {
         callback?.({ error: err.message });
       }
