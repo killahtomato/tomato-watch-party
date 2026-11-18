@@ -88,6 +88,40 @@ function rewriteLines(lines, baseUrl, token) {
   });
 }
 
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const MAX_REDIRECTS = 6;
+
+export async function fetchUpstream(url, decoded, range) {
+  const headers = { 'User-Agent': AGENT, 'Accept': '*/*' };
+  if (decoded.referrer) headers.Referer = decoded.referrer;
+  if (decoded.origin) headers.Origin = decoded.origin;
+  if (range) headers.Range = range;
+
+  let current = url;
+  for (let hop = 0; hop < MAX_REDIRECTS; hop++) {
+    const response = await fetch(current, {
+      headers,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!REDIRECT_STATUSES.has(response.status)) return response;
+
+    const location = response.headers.get('location');
+    if (!location) return response;
+    let next;
+    try {
+      next = new URL(location, current);
+    } catch {
+      return response;
+    }
+    if (next.protocol !== 'http:' && next.protocol !== 'https:') return response;
+    if (isBlockedHost(next.hostname)) return response;
+    try { response.body?.cancel(); } catch {}
+    current = next.toString();
+  }
+  throw new Error('too many redirects');
+}
+
 export function buildStreamProxyUrl(url, { hosts, referrer = '', origin = '' }) {
   const token = issueStreamToken({ hosts, referrer, origin });
   return `/api/web/stream?token=${encodeURIComponent(token)}&url=${encodeURIComponent(url)}`;
@@ -114,18 +148,9 @@ export async function handleWebStream(req, res) {
     return sendError(res, 403, 'host not allowed');
   }
 
-  const headers = { 'User-Agent': AGENT, 'Accept': '*/*' };
-  if (decoded.referrer) headers.Referer = decoded.referrer;
-  if (decoded.origin) headers.Origin = decoded.origin;
-  if (req.headers.range) headers.Range = req.headers.range;
-
   let upstream;
   try {
-    upstream = await fetch(url.toString(), {
-      headers,
-      redirect: 'error',
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
+    upstream = await fetchUpstream(url.toString(), decoded, req.headers.range);
   } catch (err) {
     logger.warn(`web proxy fetch failed for ${url.hostname}: ${err.message}`);
     return sendError(res, 504, 'upstream request failed');

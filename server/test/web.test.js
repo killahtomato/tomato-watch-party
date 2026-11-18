@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import http from 'node:http';
 
 process.env.JWT_SECRET = 'test-jwt-secret-not-default';
 process.env.HOST_PASSWORD = 'test-host-password';
@@ -113,4 +114,33 @@ test('tomato bridge reports disabled or missing binary status', () => {
   assert.equal(status.enabled, true);
   assert.equal(status.available, false);
   assert.equal(status.bin, '/nonexistent/tomato-play');
+});
+
+test('web proxy serves upstream bytes and blocks private redirect targets', async () => {
+  const server = http.createServer((req, res) => {
+    if (req.url === '/redirect') {
+      res.writeHead(302, { location: `http://127.0.0.1:${server.address().port}/final` });
+      res.end();
+      return;
+    }
+    if (req.url === '/playlist') {
+      res.writeHead(200, { 'content-type': 'application/vnd.apple.mpegurl' });
+      res.end('#EXTM3U\n');
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'application/octet-stream' });
+    res.end('ok');
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  const decoded = { hosts: ['127.0.0.1'], referrer: '', origin: '' };
+
+  const ok = await proxy.fetchUpstream(`http://127.0.0.1:${port}/playlist`, decoded, null);
+  assert.equal(ok.status, 200);
+  assert.equal(ok.headers.get('content-type'), 'application/vnd.apple.mpegurl');
+
+  const blocked = await proxy.fetchUpstream(`http://127.0.0.1:${port}/redirect`, decoded, null);
+  assert.equal(blocked.status, 302);
+
+  server.close();
 });
