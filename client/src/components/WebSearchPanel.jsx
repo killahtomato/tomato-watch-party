@@ -239,10 +239,13 @@ export default function WebSearchPanel({ emit, isHost, onPlay }) {
               {busy && <p className="web-hint">Searching...</p>}
               {!busy && results.length === 0 && <p className="web-hint">Search for a show to get started.</p>}
               {!busy && results.length > 0 && probeStatus === 'probing' && (
-                <p className="web-hint">Checking availability...</p>
+                <p className="web-hint">Checking availability... this can take a minute for large lists</p>
               )}
               {probeStatus === 'done' && (
                 <p className="web-hint">{playableKeys.size} of {results.length} available</p>
+              )}
+              {probeStatus === 'error' && (
+                <p className="web-hint">Availability check failed.</p>
               )}
               {sortedResults.map((result) => {
                 const key = `${result.source}:${result.id}`;
@@ -258,7 +261,7 @@ export default function WebSearchPanel({ emit, isHost, onPlay }) {
                     <span className="web-result-title">{result.title}</span>
                     {probeStatus === 'done' && (
                       <span className={`web-avail ${playable ? 'yes' : 'no'}`}>
-                        {playable ? '✓ Available' : 'Unavailable'}
+                        {playable ? '✓ Available' : '⚠ Unavailable'}
                       </span>
                     )}
                   </button>
