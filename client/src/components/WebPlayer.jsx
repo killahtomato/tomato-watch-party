@@ -39,6 +39,9 @@ export default function WebPlayer({
   const videoRef = useRef(null);
   const playbackRef = useRef({ isPlaying: false, currentTime: 0 });
   const lastSeekTime = useRef(0);
+  const startedRef = useRef(false);
+  const resumeAfterSeekRef = useRef(false);
+  const seekResumeTimeoutRef = useRef(null);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [throws, setThrows] = useState([]);
@@ -71,6 +74,7 @@ export default function WebPlayer({
     if (!video || !proxyUrl) return;
 
     let hls = null;
+    startedRef.current = false;
     const startPlayback = () => {
       if (playbackRef.current.isPlaying) video.play().catch(() => {});
     };
@@ -94,12 +98,17 @@ export default function WebPlayer({
       hls.on(Hls.Events.MANIFEST_PARSED, startPlayback);
     }
 
-    const onCanPlay = () => startPlayback();
+    const onCanPlay = () => {
+      if (startedRef.current) return;
+      startedRef.current = true;
+      startPlayback();
+    };
     video.addEventListener('canplay', onCanPlay);
     startPlayback();
 
     return () => {
       video.removeEventListener('canplay', onCanPlay);
+      clearTimeout(seekResumeTimeoutRef.current);
       if (hls) hls.destroy();
     };
   }, [proxyUrl, isHls]);
@@ -198,7 +207,15 @@ export default function WebPlayer({
         onProgress({ current: video.currentTime, duration: 0, live: true });
       }
     };
-    const handleSeeked = () => { lastSeekTime.current = Date.now(); };
+    const handleSeeked = () => {
+      lastSeekTime.current = Date.now();
+      if (resumeAfterSeekRef.current) {
+        resumeAfterSeekRef.current = false;
+        clearTimeout(seekResumeTimeoutRef.current);
+        playbackRef.current.isPlaying = true;
+        video.play().catch(() => {});
+      }
+    };
     const handleEnded = () => {
       setVideoEnded(true);
       if (isHost) emit('web:ended');
@@ -265,14 +282,26 @@ export default function WebPlayer({
 
   useEffect(() => {
     if (seekRef) seekRef.current = (time) => {
-      if (videoRef.current) {
-        lastSeekTime.current = Date.now();
-        videoRef.current.currentTime = time;
+      const video = videoRef.current;
+      if (!video) return;
+      lastSeekTime.current = Date.now();
+      resumeAfterSeekRef.current = !video.paused;
+      clearTimeout(seekResumeTimeoutRef.current);
+      video.currentTime = time;
+      if (onProgress && Number.isFinite(video.duration) && video.duration > 0) {
+        onProgress({ current: time, duration: video.duration, live: false });
       }
+      seekResumeTimeoutRef.current = setTimeout(() => {
+        if (!resumeAfterSeekRef.current) return;
+        resumeAfterSeekRef.current = false;
+        playbackRef.current.isPlaying = true;
+        video.play().catch(() => {});
+      }, 1000);
     };
     if (playRef) playRef.current = () => videoRef.current?.play().catch(() => {});
     if (pauseRef) pauseRef.current = () => videoRef.current?.pause();
-  }, [seekRef, playRef, pauseRef]);
+    return () => clearTimeout(seekResumeTimeoutRef.current);
+  }, [seekRef, playRef, pauseRef, onProgress]);
 
   useEffect(() => {
     const video = videoRef.current;
