@@ -31,6 +31,7 @@ export default function WebPlayer({
   const stream = webState?.web || null;
   const proxyUrl = stream?.proxyUrl || null;
   const mediaType = stream?.type || 'hls';
+  const isHls = mediaType === 'hls';
   const myUserId = userId || null;
 
   const handleThrow = useCallback((item) => {
@@ -46,7 +47,9 @@ export default function WebPlayer({
     if (!video || !proxyUrl) return;
 
     let hls = null;
-    const isHls = mediaType === 'hls' || mediaType === 'dash';
+    const startPlayback = () => {
+      if (playbackRef.current.isPlaying) video.play().catch(() => {});
+    };
 
     if (isHls && Hls.isSupported()) {
       hls = new Hls({ enableWorker: true });
@@ -64,18 +67,18 @@ export default function WebPlayer({
           hls.destroy();
         }
       });
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        if (playbackRef.current.isPlaying) video.play().catch(() => {});
-      });
-    } else {
-      video.src = proxyUrl;
-      if (playbackRef.current.isPlaying) video.play().catch(() => {});
+      hls.on(Hls.Events.MANIFEST_PARSED, startPlayback);
     }
 
+    const onCanPlay = () => startPlayback();
+    video.addEventListener('canplay', onCanPlay);
+    startPlayback();
+
     return () => {
+      video.removeEventListener('canplay', onCanPlay);
       if (hls) hls.destroy();
     };
-  }, [proxyUrl, mediaType]);
+  }, [proxyUrl, isHls]);
 
   useEffect(() => {
     if (!isHost) return;
@@ -94,10 +97,15 @@ export default function WebPlayer({
     const handlePlaybackUpdate = (state) => {
       playbackRef.current = { isPlaying: state.isPlaying, currentTime: state.currentTime };
       if (state.isPlaying && videoError) setVideoError(false);
-      if (isHost) return;
 
       const video = videoRef.current;
       if (!video || !proxyUrl) return;
+
+      if (isHost) {
+        if (state.isPlaying && video.paused) video.play().catch(() => {});
+        return;
+      }
+
       const diff = Math.abs(video.currentTime - state.currentTime);
       const threshold = state.forceResync ? 0.1 : 4;
       if (diff > threshold && video.readyState >= 2) {
@@ -143,7 +151,18 @@ export default function WebPlayer({
       setVideoEnded(true);
       if (isHost) emit('web:ended');
     };
-    const handleError = () => setVideoError(true);
+    const handleError = () => {
+      setVideoError(true);
+      if (isHost && !isHls) {
+        setTimeout(() => {
+          const v = videoRef.current;
+          if (v) {
+            v.load();
+            if (playbackRef.current.isPlaying) v.play().catch(() => {});
+          }
+        }, 1500);
+      }
+    };
 
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('seeked', handleSeeked);
@@ -155,7 +174,7 @@ export default function WebPlayer({
       video.removeEventListener('ended', handleEnded);
       video.removeEventListener('error', handleError);
     };
-  }, [onProgress, isHost, emit]);
+  }, [onProgress, isHost, emit, isHls]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -315,6 +334,7 @@ export default function WebPlayer({
       `}</style>
       <video
         ref={videoRef}
+        src={isHls ? undefined : proxyUrl}
         playsInline
         controls={false}
         disablePictureInPicture
