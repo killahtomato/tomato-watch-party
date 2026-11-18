@@ -1,4 +1,4 @@
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import { createHash } from 'crypto';
 import { existsSync } from 'fs';
@@ -74,6 +74,62 @@ function fail(stage, error) {
   return err;
 }
 
+function parseTomatoJson(text, action) {
+  const trimmed = String(text).trim();
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start === -1 || end <= start) throw fail(action, 'malformed JSON output');
+  let data;
+  try {
+    data = JSON.parse(trimmed.slice(start, end + 1));
+  } catch {
+    throw fail(action, 'malformed JSON output');
+  }
+  if (data.ok !== true) throw fail(data.stage || action, data.error || 'request failed');
+  if (data.version !== 1) throw fail(action, 'unsupported tomato-play JSON version');
+  return data;
+}
+
+function runProcess(args, input) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('bash', [getBin(), '--json', ...args], { stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill('SIGTERM');
+      reject(fail(args[0] || '', 'tomato-play timed out'));
+    }, getTimeoutMs());
+
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('error', (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
+    });
+    child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (code !== 0) {
+        const err = fail(args[0] || '', `tomato-play exited with code ${code}`);
+        err.stdout = stdout;
+        err.stderr = stderr;
+        reject(err);
+      } else {
+        resolve(stdout);
+      }
+    });
+
+    if (input) child.stdin.write(input);
+    child.stdin.end();
+  });
+}
+
 function validateArgs(action, args) {
   if (!ACTIONS.has(action)) throw fail('', `unknown action: ${action}`);
 
@@ -131,18 +187,9 @@ async function runJson(action, args) {
         timeout: getTimeoutMs(),
         maxBuffer: 8 * 1024 * 1024,
       });
-      const text = String(stdout).trim();
-      const start = text.indexOf('{');
-      const end = text.lastIndexOf('}');
-      if (start === -1 || end <= start) throw fail(action, 'malformed JSON output');
-      const data = JSON.parse(text.slice(start, end + 1));
-      if (data.ok !== true) throw fail(data.stage || action, data.error || 'request failed');
-      if (data.version !== 1) throw fail(action, 'unsupported tomato-play JSON version');
+      const data = parseTomatoJson(stdout, action);
       setCached(key, action, data);
       return data;
-    } catch (err) {
-      if (err instanceof SyntaxError) throw fail(action, 'malformed JSON output');
-      throw err;
     } finally {
       inflight.delete(key);
     }
@@ -178,6 +225,39 @@ export async function tomatoAudioModes(source, id, episode) {
 
 export async function tomatoTrending() {
   return runJson('trending', []);
+}
+
+export async function tomatoProbe(results) {
+  const clean = (Array.isArray(results) ? results : []).slice(0, 200).map((entry) => ({
+    source: String(entry?.source || '').trim().slice(0, 40),
+    id: String(entry?.id || '').trim().slice(0, 200),
+    title: String(entry?.title || '').trim().slice(0, 200),
+  })).filter((entry) => entry.source && entry.id);
+  if (clean.length === 0) return [];
+
+  if (!isEnabled()) throw fail('', 'tomato-play integration disabled');
+  if (!existsSync(getBin())) throw fail('', 'tomato-play not found');
+
+  const tsv = `${clean.map((entry) => `${entry.source}:${entry.id}\t${entry.title}`).join('\n')}\n`;
+  const key = `probe:${createHash('sha1').update(tsv).digest('hex')}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  if (inflight.has(key)) return inflight.get(key);
+
+  const request = (async () => {
+    try {
+      const stdout = await runProcess(['probe'], tsv);
+      const data = parseTomatoJson(stdout, 'probe');
+      const playable = Array.isArray(data.results) ? data.results : [];
+      setCached(key, 'probe', playable);
+      return playable;
+    } finally {
+      inflight.delete(key);
+    }
+  })();
+
+  inflight.set(key, request);
+  return request;
 }
 
 export function logTomatoStatus() {

@@ -116,6 +116,13 @@ test('tomato bridge reports disabled or missing binary status', () => {
   assert.equal(status.bin, '/nonexistent/tomato-play');
 });
 
+test('tomato probe validates input and short-circuits empty lists', async () => {
+  assert.deepEqual(await bridge.tomatoProbe([]), []);
+  assert.deepEqual(await bridge.tomatoProbe(null), []);
+  assert.deepEqual(await bridge.tomatoProbe([{ source: '', id: '' }, { source: 'aniwatch' }]), []);
+  await assert.rejects(() => bridge.tomatoProbe([{ source: 'aniwatch', id: 'x' }]), /tomato-play not found/);
+});
+
 test('web proxy serves upstream bytes and blocks private redirect targets', async () => {
   const server = http.createServer((req, res) => {
     if (req.url === '/redirect') {

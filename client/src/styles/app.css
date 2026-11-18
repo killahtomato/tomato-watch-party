@@ -1865,6 +1865,14 @@ video::media-controls { display: none !important; }
   flex-shrink: 0;
 }
 .web-result-title { flex: 1; }
+.web-result-item.unavailable { opacity: 0.5; }
+.web-avail {
+  font-size: 11px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.web-avail.yes { color: var(--success); }
+.web-avail.no { color: var(--text-dim); }
 
 .web-picker-header {
   display: flex;
@@ -2338,18 +2346,19 @@ video::media-controls { display: none !important; }
 
 /* Room Switcher */
 .room-switcher {
-  position: fixed;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1000;
   display: flex;
   gap: 4px;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 4px;
+  padding: 8px;
+  justify-content: center;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.room-panes {
+  flex: 1;
+  position: relative;
+  min-height: 0;
 }
 
 .room-btn {

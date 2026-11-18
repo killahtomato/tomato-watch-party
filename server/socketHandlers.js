@@ -44,6 +44,7 @@ import {
   tomatoResolve,
   tomatoAudioModes,
   tomatoTrending,
+  tomatoProbe,
 } from './tomatoBridge.js';
 
 const MAX_CHAT_HISTORY = 200;
@@ -395,6 +396,20 @@ export function setupSocketHandlers(io) {
       try {
         const result = await tomatoTrending();
         callback?.({ success: true, results: Array.isArray(result.results) ? result.results : [] });
+      } catch (err) {
+        callback?.({ error: err.message });
+      }
+    });
+
+    socket.on('web:probe', async (data, callback) => {
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
+      try {
+        const results = Array.isArray(data?.results) ? data.results : [];
+        const playable = await tomatoProbe(results);
+        const keys = playable
+          .filter((entry) => entry && entry.source && entry.id)
+          .map((entry) => `${entry.source}:${entry.id}`);
+        callback?.({ success: true, playable: keys });
       } catch (err) {
         callback?.({ error: err.message });
       }

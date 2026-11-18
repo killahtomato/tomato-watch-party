@@ -231,9 +231,10 @@ export default function App() {
 
   return (
     <div className="app">
-      <RoomSwitcher currentRoom={currentRoom} onSwitch={handleRoomSwitch} />
-
       <div className="main-area">
+        <RoomSwitcher currentRoom={currentRoom} onSwitch={handleRoomSwitch} />
+
+        <div className="room-panes">
         <div className={`room-pane movie-pane ${currentRoom === 'movie' ? 'active' : 'inactive'}`}>
           {webState?.web ? (
             <WebPlayer
@@ -303,6 +304,7 @@ export default function App() {
             onPercentUpdate={setDJPlaybackPercent}
             playbackPercent={djPlaybackPercent}
           />
+        </div>
         </div>
       </div>
 

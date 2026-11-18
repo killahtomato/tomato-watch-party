@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 
 const SOURCES = [
   ['all', 'All sources'],
@@ -28,6 +28,8 @@ export default function WebSearchPanel({ emit, isHost, onPlay }) {
   const [selectedQuality, setSelectedQuality] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [playableKeys, setPlayableKeys] = useState(() => new Set());
+  const [probeStatus, setProbeStatus] = useState('idle');
 
   const run = useCallback((event, data) => new Promise((resolvePromise, rejectPromise) => {
     emit(event, data, (response) => {
@@ -35,6 +37,26 @@ export default function WebSearchPanel({ emit, isHost, onPlay }) {
       else resolvePromise(response);
     });
   }), [emit]);
+
+  useEffect(() => {
+    if (results.length === 0) {
+      setPlayableKeys(new Set());
+      setProbeStatus('idle');
+      return undefined;
+    }
+    let cancelled = false;
+    setProbeStatus('probing');
+    run('web:probe', { results })
+      .then((response) => {
+        if (cancelled) return;
+        setPlayableKeys(new Set(Array.isArray(response.playable) ? response.playable : []));
+        setProbeStatus('done');
+      })
+      .catch(() => {
+        if (!cancelled) setProbeStatus('error');
+      });
+    return () => { cancelled = true; };
+  }, [results, run]);
 
   const handleSearch = useCallback(async (e) => {
     e?.preventDefault();
@@ -47,6 +69,8 @@ export default function WebSearchPanel({ emit, isHost, onPlay }) {
     setEpisodeFilter('');
     setSelectedEpisode(null);
     setResolved(null);
+    setPlayableKeys(new Set());
+    setProbeStatus('idle');
     try {
       const response = await run('web:search', { q: query.trim(), source });
       setResults(response.results || []);
@@ -180,6 +204,15 @@ export default function WebSearchPanel({ emit, isHost, onPlay }) {
     ))
     : episodes;
 
+  const sortedResults = useMemo(() => {
+    if (probeStatus !== 'done') return results;
+    return [...results].sort((a, b) => {
+      const aPlayable = playableKeys.has(`${a.source}:${a.id}`) ? 0 : 1;
+      const bPlayable = playableKeys.has(`${b.source}:${b.id}`) ? 0 : 1;
+      return aPlayable - bPlayable;
+    });
+  }, [results, playableKeys, probeStatus]);
+
   return (
     <div className="web-search-panel">
       <form className="web-search-form" onSubmit={handleSearch}>
@@ -205,16 +238,32 @@ export default function WebSearchPanel({ emit, isHost, onPlay }) {
             <div className="web-results">
               {busy && <p className="web-hint">Searching...</p>}
               {!busy && results.length === 0 && <p className="web-hint">Search for a show to get started.</p>}
-              {results.map((result) => (
-                <button
-                  key={`${result.source}:${result.id}`}
-                  className={`web-result-item ${selectedResult?.id === result.id ? 'active' : ''}`}
-                  onClick={() => handlePickResult(result)}
-                >
-                  <span className="web-result-source">{result.source}</span>
-                  <span className="web-result-title">{result.title}</span>
-                </button>
-              ))}
+              {!busy && results.length > 0 && probeStatus === 'probing' && (
+                <p className="web-hint">Checking availability...</p>
+              )}
+              {probeStatus === 'done' && (
+                <p className="web-hint">{playableKeys.size} of {results.length} available</p>
+              )}
+              {sortedResults.map((result) => {
+                const key = `${result.source}:${result.id}`;
+                const playable = playableKeys.has(key);
+                const stateClass = probeStatus === 'done' ? (playable ? 'playable' : 'unavailable') : '';
+                return (
+                  <button
+                    key={key}
+                    className={`web-result-item ${selectedResult?.id === result.id ? 'active' : ''} ${stateClass}`}
+                    onClick={() => handlePickResult(result)}
+                  >
+                    <span className="web-result-source">{result.source}</span>
+                    <span className="web-result-title">{result.title}</span>
+                    {probeStatus === 'done' && (
+                      <span className={`web-avail ${playable ? 'yes' : 'no'}`}>
+                        {playable ? '✓ Available' : 'Unavailable'}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           ) : (
             <>
