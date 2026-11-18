@@ -340,23 +340,26 @@ export default function WebPlayer({
           else videoRef.current?.requestFullscreen();
         }}
       />
-      <div className="player-controls-right">
-        <div className="volume-control">
-          <button className="mute-btn" onClick={() => setIsMuted((m) => !m)} title={isMuted ? 'Unmute' : 'Mute'}>
-            {isMuted ? '🔇' : volume > 0.5 ? '🔊' : volume > 0 ? '🔉' : '🔈'}
-          </button>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={volume}
-            onChange={(e) => setVolume(parseFloat(e.target.value))}
-            className="volume-slider"
-          />
+      <div className="player-bar">
+        <div className="player-controls-left" />
+        <ThrowButton onThrow={handleThrow} onReaction={handleReaction} on={on} reactionsEnabled={reactionsEnabled} />
+        <div className="player-controls-right">
+          <div className="volume-control">
+            <button className="mute-btn" onClick={() => setIsMuted((m) => !m)} title={isMuted ? 'Unmute' : 'Mute'}>
+              {isMuted ? '🔇' : volume > 0.5 ? '🔊' : volume > 0 ? '🔉' : '🔈'}
+            </button>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={volume}
+              onChange={(e) => setVolume(parseFloat(e.target.value))}
+              className="volume-slider"
+            />
+          </div>
         </div>
       </div>
-      <ThrowButton onThrow={handleThrow} onReaction={handleReaction} on={on} reactionsEnabled={reactionsEnabled} />
     </div>
   );
 }

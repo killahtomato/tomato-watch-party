@@ -604,35 +604,37 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
         }}
       />
       <audio ref={audioRef} preload="auto" playsInline style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px' }} />
-      <div className="player-controls-left">
-        <select className="audio-selector" value={selectedAudio} onChange={handleAudioChange} title="Audio Track">
-          {audioTracks.length > 0
-            ? audioTracks.map((t, i) => (
-                <option key={i} value={i}>{t.label}</option>
-              ))
-            : <option value={0}>Audio: Default</option>}
-        </select>
-        <select className="subtitle-selector" value={selectedSubtitle} onChange={handleSubtitleChange} title="Subtitles">
-          <option value={-1}>Subs: Off</option>
-          {subtitleTracks.map((t, i) => (
-            <option key={i} value={i}>{t.label}</option>
-          ))}
-        </select>
-      </div>
-      <div className="player-controls-right">
-        <select className="quality-selector" value={currentQuality} onChange={(e) => handleManualQualityChange(e.target.value)}>
-          {QUALITY_PRESETS.map(q => (
-            <option key={q} value={q}>{q}</option>
-          ))}
-        </select>
-        <div className="volume-control">
-          <button className="mute-btn" onClick={() => setIsMuted(m => !m)} title={isMuted ? 'Unmute' : 'Mute'}>
-            {isMuted ? '🔇' : volume > 0.5 ? '🔊' : volume > 0 ? '🔉' : '🔈'}
-          </button>
-          <input type="range" min="0" max="1" step="0.05" value={volume} onChange={(e) => setVolume(parseFloat(e.target.value))} className="volume-slider" />
+      <div className="player-bar">
+        <div className="player-controls-left">
+          <select className="audio-selector" value={selectedAudio} onChange={handleAudioChange} title="Audio Track">
+            {audioTracks.length > 0
+              ? audioTracks.map((t, i) => (
+                  <option key={i} value={i}>{t.label}</option>
+                ))
+              : <option value={0}>Audio: Default</option>}
+          </select>
+          <select className="subtitle-selector" value={selectedSubtitle} onChange={handleSubtitleChange} title="Subtitles">
+            <option value={-1}>Subs: Off</option>
+            {subtitleTracks.map((t, i) => (
+              <option key={i} value={i}>{t.label}</option>
+            ))}
+          </select>
+        </div>
+        <ThrowButton onThrow={handleThrow} onReaction={handleReaction} on={on} reactionsEnabled={reactionsEnabled} />
+        <div className="player-controls-right">
+          <select className="quality-selector" value={currentQuality} onChange={(e) => handleManualQualityChange(e.target.value)}>
+            {QUALITY_PRESETS.map(q => (
+              <option key={q} value={q}>{q}</option>
+            ))}
+          </select>
+          <div className="volume-control">
+            <button className="mute-btn" onClick={() => setIsMuted(m => !m)} title={isMuted ? 'Unmute' : 'Mute'}>
+              {isMuted ? '🔇' : volume > 0.5 ? '🔊' : volume > 0 ? '🔉' : '🔈'}
+            </button>
+            <input type="range" min="0" max="1" step="0.05" value={volume} onChange={(e) => setVolume(parseFloat(e.target.value))} className="volume-slider" />
+          </div>
         </div>
       </div>
-      <ThrowButton onThrow={handleThrow} onReaction={handleReaction} on={on} reactionsEnabled={reactionsEnabled} />
     </div>
   );
 }
