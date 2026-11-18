@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import WebSearchPanel from './WebSearchPanel.jsx';
+import MovieLibraryPanel from './MovieLibraryPanel.jsx';
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -10,8 +11,9 @@ function formatTime(seconds) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export default function WebHostControls({ emit, webState, seekRef, playRef, pauseRef, progress }) {
+export default function WebHostControls({ emit, webState, seekRef, playRef, pauseRef, progress, movies = [], onReorderMovies }) {
   const [panelOpen, setPanelOpen] = useState(false);
+  const [moviePanelOpen, setMoviePanelOpen] = useState(false);
   const [reactionsEnabled, setReactionsEnabled] = useState(true);
   const [dragPercent, setDragPercent] = useState(null);
 
@@ -113,9 +115,24 @@ export default function WebHostControls({ emit, webState, seekRef, playRef, paus
         </label>
       </div>
 
+      <MovieLibraryPanel
+        emit={emit}
+        movies={movies}
+        onReorderMovies={onReorderMovies}
+        open={moviePanelOpen}
+        onOpenChange={(value) => {
+          setMoviePanelOpen(value);
+          if (value) setPanelOpen(false);
+        }}
+      />
+
       <div
         className={`movie-panel-tab web-panel-tab${panelOpen ? ' open' : ''}`}
-        onClick={() => setPanelOpen((o) => !o)}
+        onClick={() => {
+          const next = !panelOpen;
+          setPanelOpen(next);
+          if (next) setMoviePanelOpen(false);
+        }}
         title="Web search"
       >
         🌐

@@ -271,6 +271,8 @@ export default function App() {
               playRef={playRef}
               pauseRef={pauseRef}
               progress={webProgress}
+              movies={movies}
+              onReorderMovies={handleReorderMovies}
             />
           ) : (
             <HostControls
