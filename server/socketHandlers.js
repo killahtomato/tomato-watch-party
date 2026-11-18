@@ -438,6 +438,8 @@ export function setupSocketHandlers(io) {
             };
           })
           .filter(Boolean);
+        const subtitleReferrer = streams[0]?.referrer || '';
+        const subtitleOrigin = streams[0]?.origin || '';
         const subtitles = (Array.isArray(result.subtitles) ? result.subtitles : [])
           .map((sub) => {
             const host = streamHost(sub.url);
@@ -446,8 +448,8 @@ export function setupSocketHandlers(io) {
               ...sub,
               proxyUrl: buildStreamProxyUrl(sub.url, {
                 hosts: [host],
-                referrer: result.referrer,
-                origin: result.origin,
+                referrer: subtitleReferrer,
+                origin: subtitleOrigin,
               }),
             };
           })
