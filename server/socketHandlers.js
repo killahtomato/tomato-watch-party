@@ -359,7 +359,7 @@ export function setupSocketHandlers(io) {
         const state = await playMovie(data.movie, data.quality);
         logger.info(`Host playing: ${data.movie}`);
         broadcastToRoom(io, 'movie', 'playbackUpdate', state, true);
-        broadcastToRoom(io, 'movie', 'web:playbackUpdate', getWebState(), true);
+        broadcastToRoom(io, 'movie', 'web:playbackUpdate', { ...getWebState(), stopped: true }, true);
         callback?.({ success: true, state });
       } catch (err) {
         callback?.({ error: err.message });

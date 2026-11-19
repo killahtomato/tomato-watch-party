@@ -220,7 +220,7 @@ export default function WebSearchPanel({ emit, on, isHost, onPlay }) {
     const handler = (state) => {
       const previous = lastWebRef.current;
       lastWebRef.current = state.web;
-      if (previous && !state.web && settings.autoplayNext && selectedResultRef.current) {
+      if (previous && !state.web && !state.stopped && settings.autoplayNext && selectedResultRef.current) {
         const list = episodesRef.current;
         const index = list.findIndex((episode) => episode.key === previous.episodeKey);
         const next = index >= 0 ? list[index + 1] : null;
