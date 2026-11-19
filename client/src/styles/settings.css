@@ -1,5 +1,5 @@
 .settings-panel-tab {
-  --drawer-w: min(320px, 85vw);
+  --drawer-w: min(340px, 88vw);
   position: fixed;
   left: 0;
   top: 50%;
@@ -23,7 +23,7 @@
 .settings-panel-tab:hover { background: var(--surface-light); }
 
 .settings-drawer {
-  --drawer-w: min(320px, 85vw);
+  --drawer-w: min(340px, 88vw);
   position: fixed;
   left: 0;
   top: 0;
@@ -74,10 +74,11 @@
 
 .settings-section h4 {
   margin: 0 0 8px;
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-dim);
+  color: var(--accent);
 }
 
 .theme-grid {
@@ -109,7 +110,7 @@
 }
 
 .theme-swatch-name {
-  font-size: 12px;
+  font-size: 13px;
   text-align: center;
 }
 
@@ -144,7 +145,7 @@
   border: none;
   color: var(--text);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 15px;
   text-align: left;
 }
 
@@ -170,12 +171,12 @@
   justify-content: space-between;
   gap: 12px;
   margin-top: 12px;
-  font-size: 13px;
+  font-size: 15px;
   color: var(--text);
 }
 
 .setting-field > span {
-  color: var(--text-dim);
+  color: var(--text);
 }
 
 .setting-field select,
@@ -185,7 +186,7 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 8px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .setting-field input[type="range"] {
@@ -205,7 +206,7 @@
   border-radius: 6px;
   color: var(--text-dim);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .segmented button.active {
