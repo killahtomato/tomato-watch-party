@@ -39,6 +39,7 @@ export default function WebPlayer({
   onProgress,
 }) {
   const videoRef = useRef(null);
+  const containerRef = useRef(null);
   const playbackRef = useRef({ isPlaying: false, currentTime: 0 });
   const lastSeekTime = useRef(0);
   const startedRef = useRef(false);
@@ -389,7 +390,7 @@ export default function WebPlayer({
   }
 
   return (
-    <div className="video-player web-player">
+    <div className="video-player web-player" ref={containerRef}>
       {videoEnded && (
         <div className="movie-ended-overlay">
           <div className="movie-ended-content">
@@ -455,7 +456,7 @@ export default function WebPlayer({
         disablePictureInPicture
         onDoubleClick={() => {
           if (document.fullscreenElement) document.exitFullscreen();
-          else videoRef.current?.requestFullscreen();
+          else containerRef.current?.requestFullscreen();
         }}
       />
       <div className="player-bar">

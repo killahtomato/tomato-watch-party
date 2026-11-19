@@ -48,6 +48,7 @@ function formatLabel(lang, title) {
 export default function VideoPlayer({ userName, isHost, emit, on, sessionData, onTimeUpdate, seekRef, playRef, pauseRef, isActive = true, movies = [] }) {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
+  const containerRef = useRef(null);
   const playbackRef = useRef({ isPlaying: false, currentTime: 0 });
   const hostInitialSyncRef = useRef(true);
   const isQualitySwitching = useRef(false);
@@ -542,7 +543,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
   }
 
   return (
-    <div className="video-player">
+    <div className="video-player" ref={containerRef}>
       {playbackState.transcoding && (
         <div className="transcode-overlay">
           <div className="waiting-message">
@@ -642,7 +643,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
         muted
         onDoubleClick={() => {
           if (document.fullscreenElement) document.exitFullscreen();
-          else videoRef.current?.requestFullscreen();
+          else containerRef.current?.requestFullscreen();
         }}
       />
       <audio ref={audioRef} preload="auto" playsInline style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px' }} />

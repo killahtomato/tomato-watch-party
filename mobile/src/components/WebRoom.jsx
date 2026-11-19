@@ -266,19 +266,23 @@ export default function WebRoom({ webState, emit, on, isActive = true, unlocked 
     clearTimeout(retryTimerRef.current);
   }, []);
 
-  const toggleFullscreen = useCallback(() => {
+  const toggleFullscreen = useCallback(async () => {
     const video = videoRef.current;
     const container = containerRef.current;
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
       return;
     }
+    if (container?.requestFullscreen) {
+      try {
+        await container.requestFullscreen();
+        return;
+      } catch {}
+    }
     if (video?.webkitEnterFullscreen) {
       video.webkitEnterFullscreen();
-    } else if (container?.requestFullscreen) {
-      container.requestFullscreen().catch(() => {});
     } else if (video?.requestFullscreen) {
-      video.requestFullscreen().catch(() => {});
+      try { await video.requestFullscreen(); } catch {}
     }
   }, []);
 

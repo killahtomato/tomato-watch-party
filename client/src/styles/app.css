@@ -255,6 +255,12 @@ input:focus {
   object-fit: contain;
 }
 
+.video-player:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+}
+
 .player-bar {
   display: flex;
   align-items: center;
