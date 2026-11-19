@@ -12,6 +12,8 @@ const KEYS = {
   chatSize: 'twp.chatSize',
   subtitleSize: 'twp.subtitleSize',
   showSubtitles: 'twp.showSubtitles',
+  djVisualizer: 'twp.djVisualizer',
+  djCrossfade: 'twp.djCrossfade',
 };
 
 const DEFAULTS = {
@@ -28,12 +30,15 @@ const DEFAULTS = {
   chatSize: 'md',
   subtitleSize: 'md',
   showSubtitles: true,
+  djVisualizer: 'radial',
+  djCrossfade: true,
 };
 
 const QUALITIES = ['1080p', '720p', '480p'];
 const WEB_SOURCES = ['all', 'aniwatch', 'gogoanime', '9anime', 'hianime', 'animegg', 'bilibili', 'youtube', 'nyaa', 'tpb'];
 const WEB_MODES = ['sub', 'dub'];
 const TEXT_SIZES = ['sm', 'md', 'lg'];
+const VISUALIZER_VARIANTS = ['radial', 'bars', 'wave'];
 
 function isUnset(key) {
   try {
@@ -59,6 +64,7 @@ function sanitize(key, value) {
   if (key === 'webMode') return WEB_MODES.includes(value) ? value : DEFAULTS[key];
   if (key === 'chatSize') return TEXT_SIZES.includes(value) ? value : DEFAULTS[key];
   if (key === 'subtitleSize') return TEXT_SIZES.includes(value) ? value : DEFAULTS[key];
+  if (key === 'djVisualizer') return VISUALIZER_VARIANTS.includes(value) ? value : DEFAULTS[key];
   if (key === 'theme') return value || DEFAULTS[key];
   if (key === 'accent') return value || DEFAULTS[key];
   return value || DEFAULTS[key];
@@ -87,6 +93,7 @@ export function applySettings(settings = getSettings()) {
   root.dataset.motion = settings.reduceMotion ? 'reduced' : 'full';
   root.dataset.chatSize = settings.chatSize;
   root.dataset.subtitleSize = settings.subtitleSize;
+  root.dataset.visualizer = settings.djVisualizer;
 }
 
 export function updateSettings(patch) {

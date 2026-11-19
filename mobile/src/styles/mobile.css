@@ -882,10 +882,36 @@ select {
   top: 12px;
   left: 0;
   right: 0;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
   z-index: 10;
   pointer-events: none;
   padding: 0 16px;
+}
+
+.m-dj-cover {
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--surface-light);
+}
+
+.m-dj-meta {
+  min-width: 0;
+}
+
+.m-dj-sub {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 1px;
 }
 
 .m-movie-info {
@@ -1048,6 +1074,38 @@ select {
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
 }
 
+.mobile-track-controls {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mobile-track-search {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+}
+
+.mobile-track-search:focus {
+  border-color: var(--accent);
+}
+
+.mobile-track-sort {
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
 .mobile-track-row {
   display: flex;
   align-items: center;
@@ -1056,6 +1114,21 @@ select {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
   font-size: 15px;
+}
+
+.mobile-track-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.mobile-track-artist {
+  font-size: 12px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobile-track-row:last-child {

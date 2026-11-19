@@ -7,7 +7,7 @@ Watch movies together with friends or host a DJ party. The host controls playbac
 ## Rooms
 
 - **🎬 Movie Room** — Local movie playback and host-streamed web/anime, with audio track switching, subtitle selection, quality selection, chat, throws, and reactions
-- **🎵 DJ Room** — Audio-only streaming with radial visualizer, track playlist, autoplay, chat, and reactions (🍾 💸 ❄️ 🤘)
+- **🎵 DJ Room** — Audio-only streaming with real track metadata and cover art, a searchable/sortable library grouped by album, shuffle/repeat modes, multiple visualizer styles, crossfade transitions, chat, and reactions (🍾 💸 ❄️ 🤘)
 
 Switch between rooms instantly. Both rooms keep playing independently.
 
@@ -67,6 +67,7 @@ Open the ⚙️ Settings tab on desktop or the gear in the mobile header. Prefer
 - **Playback** — default quality, auto-play next, show subtitles, and default volume.
 - **Web** — preferred anime source and default audio (sub/dub).
 - **Chat** — chat text size and subtitle size (Small/Medium/Large).
+- **DJ** — visualizer style (radial, bars, wave) and crossfade transitions.
 - **Viewers** — show or hide the health and ping readout.
 
 ## Requirements

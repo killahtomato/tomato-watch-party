@@ -187,6 +187,28 @@ export default function SettingsPanel({ open, onClose }) {
         </div>
 
         <div className="settings-section">
+          <h4>DJ</h4>
+          <label className="setting-field">
+            <span>Visualizer style</span>
+            <select
+              data-setting="djVisualizer"
+              value={settings.djVisualizer}
+              onChange={(e) => patch({ djVisualizer: e.target.value })}
+            >
+              <option value="radial">Radial</option>
+              <option value="bars">Bars</option>
+              <option value="wave">Wave</option>
+            </select>
+          </label>
+          <Toggle
+            setting="djCrossfade"
+            label="Crossfade transitions"
+            checked={settings.djCrossfade}
+            onChange={(value) => patch({ djCrossfade: value })}
+          />
+        </div>
+
+        <div className="settings-section">
           <h4>Chat</h4>
           <Segmented
             setting="chatSize"

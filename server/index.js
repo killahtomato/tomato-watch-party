@@ -19,7 +19,7 @@ import {
   isSafeName,
   STREAM_DIR,
 } from './streamManager.js';
-import { getAudioFileList } from './djManager.js';
+import { getAudioFileList, isSafeRelativePath, ensureTrackCover } from './djManager.js';
 import { getOrder } from './orderStore.js';
 import { handleWebStream } from './webProxy.js';
 import { logTomatoStatus } from './tomatoBridge.js';
@@ -256,11 +256,28 @@ app.get('/api/audio-file/:track', (req, res) => {
   } catch {
     return res.status(400).json({ error: 'Invalid track name' });
   }
-  if (!isSafeName(trackName)) return res.status(400).json({ error: 'Invalid track name' });
+  if (!isSafeRelativePath(trackName)) return res.status(400).json({ error: 'Invalid track name' });
 
   const trackPath = safeJoin(getMusicDir(), trackName);
   if (!existsSync(trackPath)) return res.status(404).json({ error: 'Not found' });
   res.sendFile(trackPath);
+});
+
+app.get('/api/audio-art/:track', async (req, res) => {
+  let trackName;
+  try {
+    trackName = decodeURIComponent(req.params.track);
+  } catch {
+    return res.status(400).json({ error: 'Invalid track name' });
+  }
+  try {
+    const artPath = await ensureTrackCover(trackName);
+    if (!artPath) return res.status(404).json({ error: 'No cover art' });
+    res.type('image/jpeg');
+    res.sendFile(artPath);
+  } catch {
+    res.status(404).json({ error: 'Not found' });
+  }
 });
 
 app.get('/api/web/stream', handleWebStream);

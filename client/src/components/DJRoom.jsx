@@ -3,9 +3,11 @@ import AudioVisualizer from './AudioVisualizer.jsx';
 import { applyOrder } from '../utils/order.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { updateSettings } from '../utils/settings.js';
+import { TRACK_SORTS, filterTracks, sortTracks, groupTracksByAlbum, computeNextTrack } from '../utils/trackList.js';
 
 export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActive = true, seekRef, playRef, pauseRef, onSeekPercent, onPercentUpdate, playbackPercent = 0 }) {
   const audioRef = useRef(null);
+  const preloadRef = useRef(null);
   const playbackRef = useRef({ isPlaying: false, currentTime: 0 });
   const wasPlayingBeforeSeekRef = useRef(false);
   const resumeAfterSeekRef = useRef(false);
@@ -31,11 +33,20 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
   }, []);
   const [dragIndex, setDragIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
+  const [query, setQuery] = useState('');
+  const [sortBy, setSortBy] = useState('name');
+  const [groupByAlbum, setGroupByAlbum] = useState(false);
 
   const tracksRef = useRef(tracks);
   tracksRef.current = tracks;
   const currentTrackRef = useRef(playbackState.track);
   currentTrackRef.current = playbackState.track;
+  const modeRef = useRef({ shuffle: false, repeat: 'all' });
+  modeRef.current = { shuffle: playbackState.shuffle, repeat: playbackState.repeat };
+
+  const isPlainList = !query.trim() && sortBy === 'name' && !groupByAlbum;
+  const visibleTracks = isPlainList ? tracks : sortTracks(filterTracks(tracks, query), sortBy);
+  const trackGroups = groupByAlbum ? groupTracksByAlbum(visibleTracks) : null;
 
   const trackUrl = playbackState.track
     ? `/api/audio-file/${encodeURIComponent(playbackState.track)}`
@@ -70,21 +81,21 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
   }, [loadTracks]);
 
   const handleDragStart = useCallback((index) => (e) => {
-    if (!isDJ) return;
+    if (!isDJ || !isPlainList) return;
     setDragIndex(index);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', String(index));
-  }, [isDJ]);
+  }, [isDJ, isPlainList]);
 
   const handleDragOver = useCallback((index) => (e) => {
-    if (!isDJ) return;
+    if (!isDJ || !isPlainList) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDragOverIndex(index);
-  }, [isDJ]);
+  }, [isDJ, isPlainList]);
 
   const handleDrop = useCallback((index) => (e) => {
-    if (!isDJ) return;
+    if (!isDJ || !isPlainList) return;
     e.preventDefault();
     const from = dragIndex ?? parseInt(e.dataTransfer.getData('text/plain'), 10);
     setDragIndex(null);
@@ -97,7 +108,7 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
     emit('dj:setOrder', { order: next.map(t => t.name) }, (res) => {
       if (res?.error) console.error(res.error);
     });
-  }, [dragIndex, tracks, emit, isDJ]);
+  }, [dragIndex, tracks, emit, isDJ, isPlainList]);
 
   const handleDragEnd = useCallback(() => {
     setDragIndex(null);
@@ -155,9 +166,8 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
     };
   const handleEnded = () => {
     if (!isDJ) return;
-    const currentIndex = tracksRef.current.findIndex(t => t.name === currentTrackRef.current);
-    const nextIndex = (currentIndex + 1) % tracksRef.current.length;
-    const nextTrack = tracksRef.current[nextIndex];
+    const { shuffle, repeat } = modeRef.current;
+    const nextTrack = computeNextTrack(tracksRef.current, currentTrackRef.current, shuffle, repeat);
     if (nextTrack) {
       emit('dj:play', { track: nextTrack.name }, () => {
         emit('dj:resume', {});
@@ -245,8 +255,28 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
   }, [isActive, playbackState.isPlaying]);
 
   useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = isMuted ? 0 : volume;
-  }, [isMuted, volume]);
+    const applyVolume = () => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      let factor = 1;
+      if (settings.djCrossfade && !settings.reduceMotion && playbackState.isPlaying && audio.duration > 0) {
+        const t = audio.currentTime;
+        if (t < 1.2) factor = Math.max(0, t / 1.2);
+        else if (t > audio.duration - 1.5) factor = Math.max(0, (audio.duration - t) / 1.5);
+      }
+      audio.volume = (isMuted ? 0 : volume) * factor;
+    };
+    applyVolume();
+    const interval = setInterval(applyVolume, 100);
+    return () => clearInterval(interval);
+  }, [isMuted, volume, playbackState.isPlaying, playbackState.track, settings.djCrossfade, settings.reduceMotion]);
+
+  useEffect(() => {
+    const next = computeNextTrack(tracks, playbackState.track, playbackState.shuffle, playbackState.repeat);
+    if (next && preloadRef.current) {
+      preloadRef.current.src = `/api/audio-file/${encodeURIComponent(next.name)}`;
+    }
+  }, [tracks, playbackState.track, playbackState.shuffle, playbackState.repeat]);
 
   useEffect(() => {
     const unsub = on('dj:reaction', (data) => {
@@ -285,6 +315,20 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
     }
     emit('dj:resume', {});
   }, [emit]);
+
+  const handleToggleShuffle = useCallback(() => {
+    emit('dj:setShuffle', { value: !playbackState.shuffle }, (res) => {
+      if (res?.error) console.error(res.error);
+    });
+  }, [emit, playbackState.shuffle]);
+
+  const handleCycleRepeat = useCallback(() => {
+    const modes = ['off', 'all', 'one'];
+    const next = modes[(modes.indexOf(playbackState.repeat) + 1) % modes.length];
+    emit('dj:setRepeat', { value: next }, (res) => {
+      if (res?.error) console.error(res.error);
+    });
+  }, [emit, playbackState.repeat]);
 
   const handleSeek = useCallback((time) => {
     if (audioRef.current) audioRef.current.currentTime = time;
@@ -351,17 +395,55 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
     emit('dj:reaction', { emoji });
   }, [emit]);
 
+  const renderTrack = (track, index) => (
+    <button
+      key={track.name}
+      className={`dj-track ${playbackState.track === track.name ? 'active' : ''} ${dragIndex === index ? 'dragging' : ''} ${dragOverIndex === index ? 'drag-over' : ''}`}
+      onClick={() => isDJ && handlePlayTrack(track.name)}
+      draggable={isDJ && isPlainList}
+      onDragStart={handleDragStart(index)}
+      onDragOver={handleDragOver(index)}
+      onDrop={handleDrop(index)}
+      onDragEnd={handleDragEnd}
+    >
+      {isDJ && isPlainList && <span className="dj-drag-handle" title="Drag to reorder">⋮⋮</span>}
+      <span className="dj-track-text">
+        <span className="dj-track-name">{track.title || track.displayName}</span>
+        {track.artist && <span className="dj-track-artist">{track.artist}</span>}
+      </span>
+      {track.duration
+        ? <span className="dj-track-duration">{formatTime(track.duration)}</span>
+        : <span />}
+    </button>
+  );
+
   return (
     <div className="dj-room">
       <div className="dj-player">
-        <AudioVisualizer audioRef={audioRef} isPlaying={playbackState.isPlaying} />
+        <AudioVisualizer audioRef={audioRef} isPlaying={playbackState.isPlaying} variant={settings.djVisualizer} />
 
-        {playbackState.track && (
+        {playbackState.track && currentTrack && (
           <div className="dj-now-playing">
-            <span className="dj-track-name">{currentTrack?.displayName || playbackState.track}</span>
-            <span className="dj-time">
-              {formatTime(playbackState.currentTime)} / {formatTime(duration)}
-            </span>
+            {currentTrack.hasArt && (
+              <img
+                className="dj-cover"
+                src={`/api/audio-art/${encodeURIComponent(currentTrack.name)}`}
+                alt=""
+                loading="lazy"
+              />
+            )}
+            <div className="dj-now-meta">
+              <span className="dj-track-name">{currentTrack.title || currentTrack.displayName}</span>
+              {(currentTrack.artist || currentTrack.album) && (
+                <span className="dj-track-sub">
+                  {[currentTrack.artist, currentTrack.album].filter(Boolean).join(' — ')}
+                  {currentTrack.year ? ` · ${currentTrack.year}` : ''}
+                </span>
+              )}
+              <span className="dj-time">
+                {formatTime(playbackState.currentTime)} / {formatTime(duration)}
+              </span>
+            </div>
           </div>
         )}
 
@@ -377,6 +459,20 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
 
         {isDJ && playbackState.track && (
           <div className="dj-controls">
+            <button
+              className={`dj-mode-btn ${playbackState.shuffle ? 'active' : ''}`}
+              onClick={handleToggleShuffle}
+              title={playbackState.shuffle ? 'Shuffle on' : 'Shuffle off'}
+            >
+              🔀
+            </button>
+            <button
+              className={`dj-mode-btn ${playbackState.repeat !== 'off' ? 'active' : ''}`}
+              onClick={handleCycleRepeat}
+              title={`Repeat: ${playbackState.repeat}`}
+            >
+              {playbackState.repeat === 'one' ? '🔂' : '🔁'}
+            </button>
             {playbackState.isPlaying ? (
               <button onClick={handlePause}>⏸ Pause</button>
             ) : (
@@ -423,31 +519,52 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
         </div>
 
         <audio ref={audioRef} preload="auto" playsInline />
+        <audio ref={preloadRef} preload="auto" style={{ display: 'none' }} />
       </div>
 
       <div className="dj-sidebar">
         <div className="dj-sidebar-header">
-          <h4>Tracks</h4>
+          <h4>Tracks ({tracks.length})</h4>
           <button onClick={handleRefreshTracks} title="Refresh track list">↻</button>
+        </div>
+        <div className="dj-track-controls">
+          <input
+            type="search"
+            className="dj-search"
+            placeholder="Search tracks…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <div className="dj-track-controls-row">
+            <select
+              className="dj-sort"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              title="Sort tracks"
+            >
+              {TRACK_SORTS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+            <label className="dj-group">
+              <input
+                type="checkbox"
+                checked={groupByAlbum}
+                onChange={(e) => setGroupByAlbum(e.target.checked)}
+              />
+              <span>Group by album</span>
+            </label>
+          </div>
         </div>
         <div className="dj-track-list">
           {tracks.length === 0 && <p className="dj-no-tracks">No audio files found</p>}
-          {tracks.map((track, index) => (
-            <button
-              key={track.name}
-              className={`dj-track ${playbackState.track === track.name ? 'active' : ''} ${dragIndex === index ? 'dragging' : ''} ${dragOverIndex === index ? 'drag-over' : ''}`}
-              onClick={() => isDJ && handlePlayTrack(track.name)}
-              draggable={isDJ}
-              onDragStart={handleDragStart(index)}
-              onDragOver={handleDragOver(index)}
-              onDrop={handleDrop(index)}
-              onDragEnd={handleDragEnd}
-            >
-              {isDJ && <span className="dj-drag-handle" title="Drag to reorder">⋮⋮</span>}
-              <span className="dj-track-name">{track.displayName}</span>
-              {track.duration && <span className="dj-track-duration">{formatTime(track.duration)}</span>}
-            </button>
-          ))}
+          {tracks.length > 0 && visibleTracks.length === 0 && <p className="dj-no-tracks">No matching tracks</p>}
+          {trackGroups
+            ? trackGroups.map(group => (
+              <div key={group.album} className="dj-track-group">
+                <div className="dj-track-group-header">{group.album}</div>
+                {group.tracks.map(track => renderTrack(track, tracks.indexOf(track)))}
+              </div>
+            ))
+            : visibleTracks.map((track, index) => renderTrack(track, index))}
         </div>
 
         {reactionsEnabled && !settings.reduceMotion && (

@@ -23,6 +23,8 @@ import {
   isDJActive,
   endPlayback as djEnd,
   getPlaylist,
+  setShuffle as djSetShuffle,
+  setRepeat as djSetRepeat,
 } from './djManager.js';
 import { logger } from './logger.js';
 import { setMovieBroadcast } from './streamManager.js';
@@ -650,6 +652,20 @@ export function setupSocketHandlers(io) {
       } catch (err) {
         callback?.({ error: err.message });
       }
+    });
+
+    socket.on('dj:setShuffle', (data, callback) => {
+      if (!isDJHostSocket(socket)) return callback?.({ error: 'Unauthorized' });
+      const state = djSetShuffle(data?.value);
+      broadcastToRoom(io, 'dj', 'dj:playbackUpdate', state, true);
+      callback?.({ success: true, state });
+    });
+
+    socket.on('dj:setRepeat', (data, callback) => {
+      if (!isDJHostSocket(socket)) return callback?.({ error: 'Unauthorized' });
+      const state = djSetRepeat(data?.value);
+      broadcastToRoom(io, 'dj', 'dj:playbackUpdate', state, true);
+      callback?.({ success: true, state });
     });
 
     socket.on('host:authenticate', (data, callback) => {

@@ -104,8 +104,21 @@ export default function DJRoom({ emit, on, sessionData, userName, unlocked, isAc
   }, [on]);
 
   useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = isMuted ? 0 : volume;
-  }, [isMuted, volume]);
+    const applyVolume = () => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      let factor = 1;
+      if (settings.djCrossfade && !settings.reduceMotion && playbackState.isPlaying && audio.duration > 0) {
+        const t = audio.currentTime;
+        if (t < 1.2) factor = Math.max(0, t / 1.2);
+        else if (t > audio.duration - 1.5) factor = Math.max(0, (audio.duration - t) / 1.5);
+      }
+      audio.volume = (isMuted ? 0 : volume) * factor;
+    };
+    applyVolume();
+    const interval = setInterval(applyVolume, 100);
+    return () => clearInterval(interval);
+  }, [isMuted, volume, playbackState.isPlaying, playbackState.track, settings.djCrossfade, settings.reduceMotion]);
 
   const handleLoadedMetadata = useCallback(() => {
     const audio = audioRef.current;
@@ -147,7 +160,12 @@ export default function DJRoom({ emit, on, sessionData, userName, unlocked, isAc
 
   return (
     <div className="m-dj-room">
-      <AudioVisualizer audioRef={audioRef} isPlaying={isActive && playbackState.isPlaying} unlocked={unlocked} />
+      <AudioVisualizer
+        audioRef={audioRef}
+        isPlaying={isActive && playbackState.isPlaying}
+        unlocked={unlocked}
+        variant={settings.djVisualizer}
+      />
 
       {!settings.reduceMotion && (
         <div className="dj-reactions">
@@ -167,10 +185,27 @@ export default function DJRoom({ emit, on, sessionData, userName, unlocked, isAc
       )}
 
       <div className="m-dj-info">
-        <span className="m-dj-title">{currentTrack?.displayName || playbackState.track || 'Nothing playing'}</span>
-        <span className="m-dj-time">
-          {formatTime(playbackState.currentTime)} / {formatTime(duration)}
-        </span>
+        {currentTrack?.hasArt && (
+          <img
+            className="m-dj-cover"
+            src={`/api/audio-art/${encodeURIComponent(currentTrack.name)}`}
+            alt=""
+            loading="lazy"
+          />
+        )}
+        <div className="m-dj-meta">
+          <span className="m-dj-title">
+            {currentTrack?.title || currentTrack?.displayName || playbackState.track || 'Nothing playing'}
+          </span>
+          {(currentTrack?.artist || currentTrack?.album) && (
+            <span className="m-dj-sub">
+              {[currentTrack.artist, currentTrack.album].filter(Boolean).join(' — ')}
+            </span>
+          )}
+          <span className="m-dj-time">
+            {formatTime(playbackState.currentTime)} / {formatTime(duration)}
+          </span>
+        </div>
       </div>
 
       <div className="m-dj-controls">
@@ -196,13 +231,12 @@ export default function DJRoom({ emit, on, sessionData, userName, unlocked, isAc
         </div>
       </div>
 
-      {trackListOpen && (
-        <DJTrackList
-          tracks={tracks}
-          currentTrack={playbackState.track}
-          onClose={() => setTrackListOpen(false)}
-        />
-      )}
+      <DJTrackList
+        open={trackListOpen}
+        tracks={tracks}
+        currentTrack={playbackState.track}
+        onClose={() => setTrackListOpen(false)}
+      />
 
       <audio
         ref={audioRef}
