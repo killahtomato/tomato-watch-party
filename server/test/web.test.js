@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import jwt from 'jsonwebtoken';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import http from 'node:http';
@@ -85,6 +86,13 @@ test('stream token is bound to its hosts', () => {
   assert.equal(decoded.referrer, 'https://ref.example/');
   assert.equal(decoded.origin, 'https://ref.example');
   assert.equal(auth.verifyStreamToken('garbage'), null);
+});
+
+test('stream token outlives a 15 minute episode', () => {
+  const token = auth.issueStreamToken({ hosts: ['cdn.example'] });
+  const decoded = jwt.decode(token);
+  assert.ok(decoded?.exp && decoded?.iat);
+  assert.ok(decoded.exp - decoded.iat > 15 * 60);
 });
 
 test('buildStreamProxyUrl yields a verifiable same-origin URL', () => {

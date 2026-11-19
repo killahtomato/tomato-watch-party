@@ -45,7 +45,9 @@ export function verifyHostPassword(password) {
   return provided.length === expected.length && crypto.timingSafeEqual(provided, expected);
 }
 
-export function issueStreamToken({ hosts, referrer = '', origin = '' }, expiresIn = '15m') {
+const STREAM_TOKEN_TTL = process.env.WEB_STREAM_TOKEN_TTL || '4h';
+
+export function issueStreamToken({ hosts, referrer = '', origin = '' }, expiresIn = STREAM_TOKEN_TTL) {
   const cleanHosts = [...new Set((Array.isArray(hosts) ? hosts : []).map(String).filter(Boolean))].slice(0, 50);
   return jwt.sign({
     role: 'stream',
