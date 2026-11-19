@@ -273,7 +273,7 @@ app.get('/api/audio-art/:track', async (req, res) => {
   try {
     const artPath = await ensureTrackCover(trackName);
     if (!artPath) return res.status(404).json({ error: 'No cover art' });
-    res.type('image/jpeg');
+    res.type(artPath.endsWith('.png') ? 'image/png' : 'image/jpeg');
     res.sendFile(artPath);
   } catch {
     res.status(404).json({ error: 'Not found' });

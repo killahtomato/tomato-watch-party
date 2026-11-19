@@ -7,7 +7,7 @@ Watch movies together with friends or host a DJ party. The host controls playbac
 ## Rooms
 
 - **🎬 Movie Room** — Local movie playback and host-streamed web/anime, with audio track switching, subtitle selection, quality selection, chat, throws, and reactions
-- **🎵 DJ Room** — Audio-only streaming with real track metadata and cover art, a searchable/sortable library grouped by album, shuffle/repeat modes, multiple visualizer styles, crossfade transitions, chat, and reactions (🍾 💸 ❄️ 🤘)
+- **🎵 DJ Room** — Audio-only streaming with real track metadata and cover art (embedded art, with an online lookup for tracks that lack it), a searchable/sortable library grouped by album, shuffle/repeat modes, multiple visualizer styles, crossfade transitions, chat, and reactions (🍾 💸 ❄️ 🤘)
 
 Switch between rooms instantly. Both rooms keep playing independently.
 

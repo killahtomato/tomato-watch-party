@@ -34,6 +34,13 @@ export default function DJTrackList({ open, tracks, currentTrack, onClose }) {
             key={track.name}
             className={`mobile-track-row ${currentTrack === track.name ? 'active' : ''}`}
           >
+            <img
+              className="mobile-track-art"
+              src={`/api/audio-art/${encodeURIComponent(track.name)}`}
+              alt=""
+              loading="lazy"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
             <span className="mobile-track-text">
               <span className="mobile-track-name">{track.title || track.displayName}</span>
               {track.artist && <span className="mobile-track-artist">{track.artist}</span>}

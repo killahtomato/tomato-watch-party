@@ -1,4 +1,4 @@
-import { readdir, stat } from 'fs/promises';
+import { readdir, stat, writeFile } from 'fs/promises';
 import { mkdirSync, existsSync } from 'fs';
 import { join, relative, sep, extname } from 'path';
 import { execFile } from 'child_process';
@@ -22,6 +22,13 @@ let playlist = [];
 let shuffle = false;
 let repeat = 'all';
 const metaCache = new Map();
+const artLookupCache = new Map();
+const ART_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+const ART_ALLOWED_HOSTS = new Set([
+  'is1-ssl.mzstatic.com', 'is2-ssl.mzstatic.com', 'is3-ssl.mzstatic.com',
+  'is4-ssl.mzstatic.com', 'is5-ssl.mzstatic.com', 'is6-ssl.mzstatic.com',
+  'cdn.deezer.com', 'e-cdns-images.dzcdn.net',
+]);
 
 export function isSafeRelativePath(name) {
   if (typeof name !== 'string' || name.length === 0) return false;
@@ -245,28 +252,130 @@ export function endPlayback() {
   return getPlaybackState();
 }
 
+function normalizeText(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function cleanSearchTerm(name) {
+  return String(name || '')
+    .replace(/[[(][^[)]*[\])]/g, ' ')
+    .replace(/\b(?:official music video|official video|official audio|visualizer|lyrics|hd|4k)\b/gi, ' ')
+    .replace(/[-—–｜|]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function pickArtwork(results, track) {
+  const list = Array.isArray(results) ? results : [];
+  if (list.length === 0) return null;
+  const artist = normalizeText(track.artist);
+  const title = normalizeText(track.title);
+  const matches = list.find((item) => {
+    const itemArtist = normalizeText(item.artistName);
+    const itemTitle = normalizeText(item.trackName);
+    const artistOk = !artist || (itemArtist && (itemArtist.includes(artist) || artist.includes(itemArtist)));
+    const titleOk = !title || (itemTitle && (itemTitle.includes(title) || title.includes(itemTitle)));
+    return artistOk && titleOk;
+  });
+  return matches || list[0] || null;
+}
+
+async function lookupArtwork(track) {
+  const rawTerm = [track.artist, track.title].filter(Boolean).join(' ') || track.displayName;
+  const term = cleanSearchTerm(rawTerm) || cleanSearchTerm(track.displayName);
+  if (!term) return null;
+  const key = `lookup:${term.toLowerCase()}`;
+  if (artLookupCache.has(key)) return artLookupCache.get(key);
+
+  let url = null;
+
+  try {
+    const response = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=5`, {
+      headers: { 'User-Agent': ART_USER_AGENT },
+      signal: AbortSignal.timeout(8000),
+    });
+    const data = await response.json();
+    const pick = pickArtwork(data?.results, track);
+    if (pick?.artworkUrl100) url = pick.artworkUrl100.replace(/\d+x\d+bb\.jpg$/, '600x600bb.jpg');
+  } catch {}
+
+  if (!url) {
+    try {
+      const query = [
+        track.artist ? `artist:"${track.artist}"` : '',
+        track.title ? `track:"${track.title}"` : '',
+      ].filter(Boolean).join(' ') || cleanSearchTerm(track.displayName);
+      const response = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=5`, {
+        headers: { 'User-Agent': ART_USER_AGENT },
+        signal: AbortSignal.timeout(8000),
+      });
+      const data = await response.json();
+      const pick = pickArtwork((data?.data || []).map(item => ({
+        artistName: item.artist?.name,
+        trackName: item.title,
+        artworkUrl100: item.album?.cover_big,
+      })), track);
+      if (pick?.artworkUrl100) url = pick.artworkUrl100;
+    } catch {}
+  }
+
+  artLookupCache.set(key, url);
+  return url;
+}
+
+function artworkExtension(url) {
+  return /\.png($|\?)/i.test(url) ? '.png' : '.jpg';
+}
+
 export async function ensureTrackCover(trackName) {
   if (!isSafeRelativePath(trackName)) throw new Error('Invalid track name');
   const abs = safeJoin(getMusicDir(), trackName);
   const fileStat = await stat(abs);
   const meta = await probeTrack(abs);
-  if (!meta.hasArt) return null;
 
   mkdirSync(ART_DIR, { recursive: true });
-  const key = createHash('sha1').update(`${abs}:${fileStat.mtimeMs}:${fileStat.size}`).digest('hex');
-  const out = join(ART_DIR, `${key}.jpg`);
-  if (!existsSync(out)) {
-    await execFileAsync('ffmpeg', [
-      '-v', 'error',
-      '-i', abs,
-      '-map', '0:v:0',
-      '-an',
-      '-c:v', 'mjpeg',
-      '-q:v', '3',
-      '-f', 'image2',
-      out,
-      '-y',
-    ]);
+
+  if (meta.hasArt) {
+    const key = createHash('sha1').update(`embedded:${abs}:${fileStat.mtimeMs}:${fileStat.size}`).digest('hex');
+    const out = join(ART_DIR, `${key}.jpg`);
+    if (!existsSync(out)) {
+      await execFileAsync('ffmpeg', [
+        '-v', 'error',
+        '-i', abs,
+        '-map', '0:v:0',
+        '-an',
+        '-c:v', 'mjpeg',
+        '-q:v', '3',
+        '-f', 'image2',
+        out,
+        '-y',
+      ]);
+    }
+    return out;
   }
+
+  const baseName = trackName.split('/').pop().replace(/\.[^.]+$/, '').replace(/[._-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const artUrl = await lookupArtwork({ artist: meta.artist, title: meta.title, displayName: baseName });
+  if (!artUrl) return null;
+
+  let host;
+  try {
+    host = new URL(artUrl).hostname;
+  } catch {
+    return null;
+  }
+  if (!ART_ALLOWED_HOSTS.has(host)) return null;
+
+  const key = createHash('sha1').update(`lookup:${artUrl}`).digest('hex');
+  const out = join(ART_DIR, `${key}${artworkExtension(artUrl)}`);
+  if (existsSync(out)) return out;
+
+  const response = await fetch(artUrl, {
+    headers: { 'User-Agent': ART_USER_AGENT, Referer: 'https://www.apple.com/' },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) return null;
+  const buffer = Buffer.from(await response.arrayBuffer());
+  await writeFile(out, buffer);
   return out;
 }

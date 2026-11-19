@@ -407,14 +407,13 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
       onDragEnd={handleDragEnd}
     >
       {isDJ && isPlainList && <span className="dj-drag-handle" title="Drag to reorder">⋮⋮</span>}
-      {track.hasArt && (
-        <img
-          className="dj-track-art"
-          src={`/api/audio-art/${encodeURIComponent(track.name)}`}
-          alt=""
-          loading="lazy"
-        />
-      )}
+      <img
+        className="dj-track-art"
+        src={`/api/audio-art/${encodeURIComponent(track.name)}`}
+        alt=""
+        loading="lazy"
+        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+      />
       <span className="dj-track-text">
         <span className="dj-track-name">{track.title || track.displayName}</span>
         {track.artist && <span className="dj-track-artist">{track.artist}</span>}
@@ -432,14 +431,13 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
 
         {playbackState.track && currentTrack && (
           <div className="dj-now-playing">
-            {currentTrack.hasArt && (
-              <img
-                className="dj-cover"
-                src={`/api/audio-art/${encodeURIComponent(currentTrack.name)}`}
-                alt=""
-                loading="lazy"
-              />
-            )}
+            <img
+              className="dj-cover"
+              src={`/api/audio-art/${encodeURIComponent(currentTrack.name)}`}
+              alt=""
+              loading="lazy"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
             <div className="dj-now-meta">
               <span className="dj-track-name">{currentTrack.title || currentTrack.displayName}</span>
               {(currentTrack.artist || currentTrack.album) && (

@@ -185,12 +185,13 @@ export default function DJRoom({ emit, on, sessionData, userName, unlocked, isAc
       )}
 
       <div className="m-dj-info">
-        {currentTrack?.hasArt && (
+        {currentTrack?.name && (
           <img
             className="m-dj-cover"
             src={`/api/audio-art/${encodeURIComponent(currentTrack.name)}`}
             alt=""
             loading="lazy"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
         )}
         <div className="m-dj-meta">
