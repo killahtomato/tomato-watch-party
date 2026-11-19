@@ -32,6 +32,26 @@ function Toggle({ label, checked, onChange, setting }) {
   );
 }
 
+function Segmented({ label, value, options, onChange, setting }) {
+  return (
+    <div className="setting-field">
+      <span>{label}</span>
+      <div className="segmented" data-setting={setting}>
+        {options.map(([id, text]) => (
+          <button
+            key={id}
+            type="button"
+            className={value === id ? 'active' : ''}
+            onClick={() => onChange(id)}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPanel({ open, onClose }) {
   const [settings, setSettings] = useState(getSettings());
 
@@ -158,6 +178,24 @@ export default function SettingsPanel({ open, onClose }) {
               ))}
             </div>
           </div>
+        </div>
+
+        <div className="settings-section">
+          <h4>Chat</h4>
+          <Segmented
+            setting="chatSize"
+            label="Chat size"
+            value={settings.chatSize}
+            options={[['sm', 'Small'], ['md', 'Medium'], ['lg', 'Large']]}
+            onChange={(value) => patch({ chatSize: value })}
+          />
+          <Segmented
+            setting="subtitleSize"
+            label="Subtitle size"
+            value={settings.subtitleSize}
+            options={[['sm', 'Small'], ['md', 'Medium'], ['lg', 'Large']]}
+            onChange={(value) => patch({ subtitleSize: value })}
+          />
         </div>
 
         <div className="settings-section">

@@ -9,6 +9,8 @@ const KEYS = {
   showHealth: 'twp.showHealth',
   webSource: 'twp.webSource',
   webMode: 'twp.webMode',
+  chatSize: 'twp.chatSize',
+  subtitleSize: 'twp.subtitleSize',
 };
 
 const DEFAULTS = {
@@ -22,11 +24,14 @@ const DEFAULTS = {
   showHealth: true,
   webSource: 'all',
   webMode: 'sub',
+  chatSize: 'md',
+  subtitleSize: 'md',
 };
 
 const QUALITIES = ['1080p', '720p', '480p'];
 const WEB_SOURCES = ['all', 'aniwatch', 'gogoanime', '9anime', 'hianime', 'animegg', 'bilibili', 'youtube', 'nyaa', 'tpb'];
 const WEB_MODES = ['sub', 'dub'];
+const TEXT_SIZES = ['sm', 'md', 'lg'];
 
 function isUnset(key) {
   try {
@@ -50,6 +55,8 @@ function sanitize(key, value) {
   if (key === 'defaultQuality') return QUALITIES.includes(value) ? value : DEFAULTS[key];
   if (key === 'webSource') return WEB_SOURCES.includes(value) ? value : DEFAULTS[key];
   if (key === 'webMode') return WEB_MODES.includes(value) ? value : DEFAULTS[key];
+  if (key === 'chatSize') return TEXT_SIZES.includes(value) ? value : DEFAULTS[key];
+  if (key === 'subtitleSize') return TEXT_SIZES.includes(value) ? value : DEFAULTS[key];
   if (key === 'theme') return value || DEFAULTS[key];
   if (key === 'accent') return value || DEFAULTS[key];
   return value || DEFAULTS[key];
@@ -76,6 +83,8 @@ export function applySettings(settings = getSettings()) {
   root.dataset.theme = settings.followSystem ? colorScheme : settings.theme;
   root.dataset.accent = settings.accent;
   root.dataset.motion = settings.reduceMotion ? 'reduced' : 'full';
+  root.dataset.chatSize = settings.chatSize;
+  root.dataset.subtitleSize = settings.subtitleSize;
 }
 
 export function updateSettings(patch) {

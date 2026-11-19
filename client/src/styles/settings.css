@@ -213,3 +213,23 @@
   border-color: var(--accent);
   color: #fff;
 }
+
+[data-chat-size="sm"] .chat-msg,
+[data-chat-size="sm"] .chat-msg.system { font-size: 13px; }
+[data-chat-size="lg"] .chat-msg,
+[data-chat-size="lg"] .chat-msg.system { font-size: 17px; }
+[data-chat-size="sm"] .chat-name,
+[data-chat-size="sm"] .chat-text { font-size: 13px; }
+[data-chat-size="lg"] .chat-name,
+[data-chat-size="lg"] .chat-text { font-size: 17px; }
+[data-chat-size="sm"] .chat-input input,
+[data-chat-size="sm"] .chat-input button { font-size: 12px; }
+[data-chat-size="lg"] .chat-input input,
+[data-chat-size="lg"] .chat-input button { font-size: 15px; }
+
+[data-subtitle-size="sm"] .subtitle-overlay span,
+[data-subtitle-size="sm"] .m-subtitle span { font-size: 18px; }
+[data-subtitle-size="md"] .subtitle-overlay span { font-size: 22px; }
+[data-subtitle-size="md"] .m-subtitle span { font-size: 17px; }
+[data-subtitle-size="lg"] .subtitle-overlay span,
+[data-subtitle-size="lg"] .m-subtitle span { font-size: 28px; }

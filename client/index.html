@@ -11,6 +11,8 @@
         var fs = (localStorage.getItem('twp.followSystem') || 'false') === 'true';
         document.documentElement.dataset.theme = fs ? (ls ? 'light' : 'dark') : (localStorage.getItem('twp.theme') || 'dark');
         document.documentElement.dataset.accent = localStorage.getItem('twp.accent') || 'red';
+        document.documentElement.dataset.chatSize = localStorage.getItem('twp.chatSize') || 'md';
+        document.documentElement.dataset.subtitleSize = localStorage.getItem('twp.subtitleSize') || 'md';
         var rm = localStorage.getItem('twp.reduceMotion');
         var reduce = rm !== null ? rm === 'true' : (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
         document.documentElement.dataset.motion = reduce ? 'reduced' : 'full';
