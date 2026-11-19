@@ -49,6 +49,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
   const videoRef = useRef(null);
   const audioRef = useRef(null);
   const playbackRef = useRef({ isPlaying: false, currentTime: 0 });
+  const hostInitialSyncRef = useRef(true);
   const isQualitySwitching = useRef(false);
   const lastSeekTime = useRef(0);
   const subIntervalRef = useRef(null);
@@ -69,6 +70,13 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
 
   useEffect(() => { setVolume(settings.volume); }, [settings.volume]);
   useEffect(() => { setCurrentQuality(settings.defaultQuality); }, [settings.defaultQuality]);
+  useEffect(() => {
+    playbackRef.current = {
+      isPlaying: Boolean(playbackState.isPlaying),
+      currentTime: playbackState.currentTime || 0,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [bufferHealth, setBufferHealth] = useState(0);
   const [pingMs, setPingMs] = useState(0);
   const [showBanner, setShowBanner] = useState(false);
@@ -124,6 +132,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    hostInitialSyncRef.current = true;
 
     const handleTimeUpdate = () => {
       if (onTimeUpdate && video.duration > 0) {
@@ -165,11 +174,21 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
       }
       setMovieEnded(true);
     };
+    const handleCanPlay = () => {
+      if (hostInitialSyncRef.current) {
+        if (Math.abs(video.currentTime - playbackRef.current.currentTime) > 1) {
+          video.currentTime = playbackRef.current.currentTime;
+        }
+        hostInitialSyncRef.current = false;
+      }
+      if (playbackRef.current.isPlaying && video.paused) video.play().catch(() => {});
+    };
 
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('seeked', handleSeeked);
     video.addEventListener('error', handleVideoError);
     video.addEventListener('ended', handleEnded);
+    video.addEventListener('canplay', handleCanPlay);
 
     const poll1 = setInterval(() => {
       const v = videoRef.current;
@@ -192,6 +211,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
       video.removeEventListener('seeked', handleSeeked);
       video.removeEventListener('error', handleVideoError);
       video.removeEventListener('ended', handleEnded);
+      video.removeEventListener('canplay', handleCanPlay);
       clearInterval(poll1);
       clearInterval(poll2);
     };
@@ -341,10 +361,20 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
       if (state.movie && state.movie !== playbackState.movie && movieEnded) setMovieEnded(false);
       if (state.isPlaying && videoError) setVideoError(false);
       if (!state.transcoding && videoError) setVideoError(false);
-      if (isHost) return;
+      const video = videoRef.current;
+      if (isHost) {
+        if (video && streamUrl) {
+          if (hostInitialSyncRef.current && video.readyState >= 2) {
+            const diff = Math.abs(video.currentTime - state.currentTime);
+            if (diff > 1) video.currentTime = state.currentTime;
+            hostInitialSyncRef.current = false;
+          }
+          if (state.isPlaying && video.paused && video.readyState >= 2) video.play().catch(() => {});
+        }
+        return;
+      }
       if (isQualitySwitching.current) return;
 
-      const video = videoRef.current;
       if (video && streamUrl && !state.transcoding) {
         const targetTime = state.currentTime;
         const diff = Math.abs(video.currentTime - targetTime);
