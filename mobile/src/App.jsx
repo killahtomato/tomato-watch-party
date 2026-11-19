@@ -7,6 +7,8 @@ import ViewerPanel from './components/ViewerPanel.jsx';
 import ActionBar from './components/ActionBar.jsx';
 import MovieRoom from './components/MovieRoom.jsx';
 import DJRoom from './components/DJRoom.jsx';
+import SettingsPanel from '@client/components/SettingsPanel.jsx';
+import { applyTheme } from '@client/utils/theme.js';
 
 const ROOM_KEY = 'twp:mobile-room';
 
@@ -26,10 +28,15 @@ export default function App() {
   const [chatUnread, setChatUnread] = useState(0);
   const [installPrompt, setInstallPrompt] = useState(null);
   const [installDismissed, setInstallDismissed] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const pendingNameRef = useRef(null);
   const chatOpenRef = useRef(false);
 
   useEffect(() => { chatOpenRef.current = chatOpen; }, [chatOpen]);
+
+  useEffect(() => {
+    applyTheme();
+  }, []);
 
   useEffect(() => {
     const handler = (e) => {
@@ -138,6 +145,14 @@ export default function App() {
         <div className="mobile-header-actions">
           <button
             className="mobile-header-btn"
+            onClick={() => setSettingsOpen(true)}
+            title="Settings"
+            aria-label="Settings"
+          >
+            ⚙️
+          </button>
+          <button
+            className="mobile-header-btn"
             onClick={() => { window.location.href = '/?desktop=1'; }}
             title="Switch to desktop site"
           >
@@ -176,6 +191,8 @@ export default function App() {
       {viewerPanelOpen && (
         <ViewerPanel viewers={viewers} count={viewerCount} onClose={() => setViewerPanelOpen(false)} />
       )}
+
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

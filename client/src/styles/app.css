@@ -190,7 +190,7 @@ input:focus {
 }
 
 .name-entry button:hover:not(:disabled) {
-  background: #ff5555;
+  background: var(--accent);
 }
 
 /* App Layout */
@@ -618,11 +618,11 @@ video::media-controls { display: none !important; }
 }
 
 .throw-btn.tomato:hover:not(:disabled) {
-  border-color: #ff4444;
+  border-color: var(--accent);
 }
 
 .throw-btn.popcorn:hover:not(:disabled) {
-  border-color: #ffaa33;
+  border-color: var(--accent-alt);
 }
 
 /* Host Controls */
@@ -1027,7 +1027,7 @@ video::media-controls { display: none !important; }
 }
 
 .replay-btn:hover {
-  background: #ff5555;
+  background: var(--accent);
   transform: scale(1.05);
 }
 
@@ -1094,12 +1094,12 @@ video::media-controls { display: none !important; }
 }
 
 .toast-success {
-  background: #44cc88;
+  background: var(--success);
   color: white;
 }
 
 .toast-forced {
-  background: #ffaa33;
+  background: var(--accent-alt);
   color: #2a5a1a;
 }
 
@@ -2130,12 +2130,12 @@ video::media-controls { display: none !important; }
 }
 
 .toast-success {
-  background: #44cc88;
+  background: var(--success);
   color: white;
 }
 
 .toast-forced {
-  background: #ffaa33;
+  background: var(--accent-alt);
   color: #2a5a1a;
 }
 
@@ -2155,7 +2155,7 @@ video::media-controls { display: none !important; }
 .viewer-dot.unknown { background: var(--text-dim); }
 .viewer-dot.good { background: #44cc88; }
 .viewer-dot.low { background: #ffaa33; }
-.viewer-dot.critical { background: #ff4444; }
+.viewer-dot.critical {   background: var(--accent); }
 
 /* Signal Bars & Ping */
 .viewer-signal {

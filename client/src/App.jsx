@@ -9,6 +9,8 @@ import WebHostControls from './components/WebHostControls.jsx';
 import WebSearchPanel from './components/WebSearchPanel.jsx';
 import DJRoom from './components/DJRoom.jsx';
 import RoomSwitcher from './components/RoomSwitcher.jsx';
+import SettingsPanel from './components/SettingsPanel.jsx';
+import { applyTheme } from './utils/theme.js';
 import { applyOrder } from './utils/order.js';
 
 export default function App() {
@@ -37,6 +39,11 @@ export default function App() {
   const [webState, setWebState] = useState(null);
   const [webProgress, setWebProgress] = useState({ current: 0, duration: 0, live: false });
   const [webPanelOpen, setWebPanelOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    applyTheme();
+  }, []);
 
   const handleSeekPercent = useCallback((pct) => {
     setPlaybackPercent(pct);
@@ -241,7 +248,16 @@ export default function App() {
   return (
     <div className="app">
       <div className="main-area">
-        <RoomSwitcher currentRoom={currentRoom} onSwitch={handleRoomSwitch} />
+        <RoomSwitcher currentRoom={currentRoom} onSwitch={handleRoomSwitch}>
+          <button
+            className="settings-btn"
+            onClick={() => setSettingsOpen(true)}
+            title="Settings"
+            aria-label="Settings"
+          >
+            ⚙️
+          </button>
+        </RoomSwitcher>
 
         <div className="room-panes">
         <div className={`room-pane movie-pane ${currentRoom === 'movie' ? 'active' : 'inactive'}`}>
@@ -332,6 +348,8 @@ export default function App() {
           <WebSearchPanel emit={emit} isHost onPlay={handleWebPlay} />
         </div>
       )}
+
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       <div className="sidebar">
         {currentRoom === 'movie' && webState?.web && (

@@ -1,4 +1,4 @@
-export default function RoomSwitcher({ currentRoom, onSwitch }) {
+export default function RoomSwitcher({ currentRoom, onSwitch, children }) {
   return (
     <div className="room-switcher">
       <button
@@ -13,6 +13,7 @@ export default function RoomSwitcher({ currentRoom, onSwitch }) {
       >
         🎵 DJ
       </button>
+      {children}
     </div>
   );
 }

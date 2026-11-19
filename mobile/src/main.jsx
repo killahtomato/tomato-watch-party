@@ -2,6 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './styles/mobile.css';
+import '@client/styles/themes.css';
+import '@client/styles/settings.css';
 import { registerSW } from 'virtual:pwa-register';
 
 registerSW({ immediate: true });
