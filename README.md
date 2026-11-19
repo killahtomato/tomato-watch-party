@@ -6,7 +6,7 @@ Watch movies together with friends or host a DJ party. The host controls playbac
 
 ## Rooms
 
-- **🎬 Movie Room** — Video streaming with host controls, audio track switching, subtitle selection, quality selection, chat, throws, and reactions
+- **🎬 Movie Room** — Local movie playback and host-streamed web/anime, with audio track switching, subtitle selection, quality selection, chat, throws, and reactions
 - **🎵 DJ Room** — Audio-only streaming with radial visualizer, track playlist, autoplay, chat, and reactions (🍾 💸 ❄️ 🤘)
 
 Switch between rooms instantly. Both rooms keep playing independently.
@@ -44,16 +44,30 @@ If you cloned with `git clone --recursive`, step 2 is already done.
 ## Features
 
 - **Synchronized playback** — Host controls play, pause, seek; audience syncs automatically
-- **Web streaming** — Host-only web search and streaming from anime providers via the bundled tomato-play CLI; the audience watches the same synced room
+- **Web streaming** — Host-only web search and streaming from anime providers via the bundled tomato-play CLI; the audience watches the same synced room, on desktop and mobile
 - **Audio track switching** — Per-user audio track selection (dual audio support)
 - **Subtitle selection** — Per-user subtitle track selection with WebVTT overlay
 - **Quality selection** — 1080p, 720p, 480p with auto-switch on poor connection
-- **Chat** — Separate chat per room with system messages
+- **Themes and accents** — 15 themes and 14 accent colors, with follow-system and reduced-motion options
+- **Chat** — Separate chat per room with system messages; adjustable message size
 - **Throws** — Tomatoes and popcorn with splatter animation (Movie Room)
 - **Reactions** — Emoji reactions with floating animation (🍾 💸 ❄️ 🤘 in DJ Room)
 - **Viewer list** — Slide-out panel with signal strength, ping, and quality controls
+- **Host badge** — the host is marked with a 👑 in chat and the viewer list
 - **Fullscreen** — Double-click video
 - **Persistent cache** — Transcoded files cached across restarts
+
+## Settings
+
+Open the ⚙️ Settings tab on desktop or the gear in the mobile header. Preferences are stored per browser (localStorage) and apply instantly.
+
+- **Theme** — 15 themes (Tomato Dark, Light, AMOLED, Midnight, Forest, Ocean, Sunset, Sakura, Grape, Amber, Espresso, Mono, Cyberpunk, Crimson, Frost) and 14 accent colors.
+- **Follow system theme** — match the OS color scheme.
+- **Reduce motion** — snap drawer and overlay animations instead of sliding them.
+- **Playback** — default quality, auto-play next, and default volume.
+- **Web** — preferred anime source and default audio (sub/dub).
+- **Chat** — chat text size and subtitle size (Small/Medium/Large).
+- **Viewers** — show or hide the health and ping readout.
 
 ## Requirements
 
@@ -76,7 +90,7 @@ The server refuses to start while `HOST_PASSWORD` or `JWT_SECRET` is unset or st
 
 ## Web Streaming (tomato-play)
 
-The host can search and stream from tomato-play's anime providers without leaving the watch party. Open the **🌐 Web** tab in the host controls, search, pick a series and episode, choose sub/dub and quality, then press Play. The stream plays in the movie room and the audience syncs exactly like a local movie — chat, throws, reactions, and the viewer list all keep working.
+The host can search and stream from tomato-play's anime providers without leaving the watch party. Open the **🌐 Web** tab in the host controls, search, pick a series and episode, choose sub/dub and quality, then press Play. Pause, resume, seek, and force a resync from the same panel; auto-play-next can be toggled in Settings. The stream plays in the movie room and the audience syncs exactly like a local movie — on desktop and mobile — with chat, throws, reactions, and the viewer list all keeping working.
 
 - Host-only: search and playback controls require the movie-room host password.
 - The audience never runs tomato-play. The server resolves the stream and serves it through a same-origin proxy, so viewers just load a normal HLS URL.
@@ -146,7 +160,7 @@ The tunnel URL is public. Use a strong `HOST_PASSWORD`, keep `JWT_SECRET` secret
 
 A dedicated mobile site is served at `/m` for phones and tablets. Visitors opening the main link on a mobile browser are redirected there automatically; a "Mobile site" link in the corner of the desktop site and a "Switch to desktop site" button on mobile let you change versions manually.
 
-The mobile site is audience-only: watch the movie or DJ set, chat, throw, react, and adjust volume, quality, audio track, and subtitles. Hosting stays on the desktop site.
+The mobile site is audience-only: watch the movie, the DJ set, or the host's web/anime stream, chat, throw, react, and adjust volume, quality, audio track, subtitles, chat size, and theme. Hosting stays on the desktop site.
 
 To develop or build the mobile app:
 
