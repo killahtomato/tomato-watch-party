@@ -2511,7 +2511,7 @@ video::media-controls { display: none !important; }
   cursor: pointer;
 }
 
-.dj-mode-btn {
+.dj-controls .dj-mode-btn {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -2536,11 +2536,27 @@ video::media-controls { display: none !important; }
   white-space: nowrap;
 }
 
-.dj-mode-btn.active {
+.dj-controls .dj-mode-btn.active {
   background: var(--accent);
   border-color: var(--accent);
   color: white;
-  box-shadow: 0 0 12px var(--accent);
+  animation: dj-mode-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes dj-mode-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 14px var(--accent),
+      0 0 34px color-mix(in srgb, var(--accent) 60%, transparent),
+      0 0 60px color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 24px var(--accent),
+      0 0 56px color-mix(in srgb, var(--accent) 85%, transparent),
+      0 0 92px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
 }
 
 .dj-reactions {
@@ -2709,6 +2725,7 @@ video::media-controls { display: none !important; }
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   width: 100%;
   padding: 10px 12px;
   margin-bottom: 2px;
@@ -2750,7 +2767,6 @@ video::media-controls { display: none !important; }
 .dj-track-duration {
   font-size: 14px;
   color: var(--text-dim);
-  margin-left: 8px;
 }
 
 .dj-track.active .dj-track-duration {
