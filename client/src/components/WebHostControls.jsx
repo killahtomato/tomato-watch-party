@@ -113,7 +113,7 @@ export default function WebHostControls({ emit, webState, seekRef, playRef, paus
         open={moviePanelOpen}
         onOpenChange={(value) => {
           setMoviePanelOpen(value);
-          if (value) setPanelOpen(false);
+          if (value) setWebPanelOpen(false);
         }}
       />
 

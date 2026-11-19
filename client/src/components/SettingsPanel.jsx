@@ -140,6 +140,12 @@ export default function SettingsPanel({ open, onClose }) {
             checked={settings.autoplayNext}
             onChange={(value) => patch({ autoplayNext: value })}
           />
+          <Toggle
+            setting="showSubtitles"
+            label="Show subtitles"
+            checked={settings.showSubtitles}
+            onChange={(value) => patch({ showSubtitles: value })}
+          />
           <label className="setting-field">
             <span>Volume</span>
             <input

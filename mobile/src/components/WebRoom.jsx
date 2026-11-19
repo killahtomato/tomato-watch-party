@@ -168,7 +168,7 @@ export default function WebRoom({ webState, emit, on, isActive = true, unlocked 
   useEffect(() => {
     const subs = stream?.subtitles || [];
     const subtitleUrl = subs[0]?.proxyUrl;
-    if (!subtitleUrl) {
+    if (!subtitleUrl || !settings.showSubtitles) {
       setSubEntries([]);
       setCurrentSubText('');
       return undefined;
@@ -179,7 +179,7 @@ export default function WebRoom({ webState, emit, on, isActive = true, unlocked 
       .then(text => { if (!cancelled) setSubEntries(parseVtt(text)); })
       .catch(() => { if (!cancelled) setSubEntries([]); });
     return () => { cancelled = true; };
-  }, [stream?.subtitles, proxyUrl]);
+  }, [stream?.subtitles, proxyUrl, settings.showSubtitles]);
 
   useEffect(() => {
     if (subEntries.length === 0) {
@@ -342,7 +342,7 @@ export default function WebRoom({ webState, emit, on, isActive = true, unlocked 
         </div>
       )}
 
-      {currentSubText && (
+      {settings.showSubtitles && currentSubText && (
         <div className="m-subtitle">
           <span>{currentSubText}</span>
         </div>

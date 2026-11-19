@@ -143,7 +143,7 @@ export default function WebPlayer({
   useEffect(() => {
     const subs = stream?.subtitles || [];
     const subtitleUrl = subs[0]?.proxyUrl;
-    if (!subtitleUrl) {
+    if (!subtitleUrl || !settings.showSubtitles) {
       setSubEntries([]);
       setCurrentSubText('');
       return undefined;
@@ -154,7 +154,7 @@ export default function WebPlayer({
       .then((text) => { if (!cancelled) setSubEntries(parseVtt(text)); })
       .catch(() => { if (!cancelled) setSubEntries([]); });
     return () => { cancelled = true; };
-  }, [stream?.subtitles, stream?.proxyUrl]);
+  }, [stream?.subtitles, stream?.proxyUrl, settings.showSubtitles]);
 
   useEffect(() => {
     if (subEntries.length === 0) { setCurrentSubText(''); return undefined; }
@@ -439,7 +439,7 @@ export default function WebPlayer({
         </div>
       )}
 
-      {currentSubText && (
+      {settings.showSubtitles && currentSubText && (
         <div className="subtitle-overlay">
           <span>{currentSubText}</span>
         </div>

@@ -11,6 +11,7 @@ const KEYS = {
   webMode: 'twp.webMode',
   chatSize: 'twp.chatSize',
   subtitleSize: 'twp.subtitleSize',
+  showSubtitles: 'twp.showSubtitles',
 };
 
 const DEFAULTS = {
@@ -26,6 +27,7 @@ const DEFAULTS = {
   webMode: 'sub',
   chatSize: 'md',
   subtitleSize: 'md',
+  showSubtitles: true,
 };
 
 const QUALITIES = ['1080p', '720p', '480p'];

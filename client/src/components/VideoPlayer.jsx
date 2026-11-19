@@ -290,7 +290,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
   }, [streamUrl]);
 
   useEffect(() => {
-    if (selectedSubtitle < 0) {
+    if (selectedSubtitle < 0 || !settings.showSubtitles) {
       setSubEntries([]);
       setCurrentSubText('');
       return;
@@ -302,7 +302,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
       .then(r => r.text())
       .then(text => setSubEntries(parseVtt(text)))
       .catch(() => setSubEntries([]));
-  }, [selectedSubtitle, playbackState?.movie, currentQuality, trackInfo]);
+  }, [selectedSubtitle, playbackState?.movie, currentQuality, trackInfo, settings.showSubtitles]);
 
   useEffect(() => {
     if (subIntervalRef.current) clearInterval(subIntervalRef.current);
@@ -625,7 +625,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
         </div>
       )}
 
-      {currentSubText && (
+      {settings.showSubtitles && currentSubText && (
         <div className="subtitle-overlay">
           <span>{currentSubText}</span>
         </div>

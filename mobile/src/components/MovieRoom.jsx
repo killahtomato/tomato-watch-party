@@ -110,7 +110,7 @@ export default function MovieRoom({ emit, on, sessionData, userName, unlocked, i
   }, [playbackState?.movie]);
 
   useEffect(() => {
-    if (!playbackState?.movie || selectedSubtitle < 0) {
+    if (!playbackState?.movie || selectedSubtitle < 0 || !settings.showSubtitles) {
       setSubEntries([]);
       return;
     }
@@ -123,7 +123,7 @@ export default function MovieRoom({ emit, on, sessionData, userName, unlocked, i
       .then(r => r.text())
       .then(text => setSubEntries(parseVtt(text)))
       .catch(() => setSubEntries([]));
-  }, [playbackState?.movie, currentQuality, selectedSubtitle, trackInfo]);
+  }, [playbackState?.movie, currentQuality, selectedSubtitle, trackInfo, settings.showSubtitles]);
 
   useEffect(() => {
     const handleUpdate = (state) => {
@@ -370,7 +370,7 @@ export default function MovieRoom({ emit, on, sessionData, userName, unlocked, i
         </div>
       )}
 
-      {currentSubText && (
+      {settings.showSubtitles && currentSubText && (
         <div className="m-subtitle">
           <span>{currentSubText}</span>
         </div>
