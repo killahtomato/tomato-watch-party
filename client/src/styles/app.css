@@ -285,7 +285,7 @@ input:focus {
 }
 
 .web-player .subtitle-overlay {
-  bottom: 70px;
+  bottom: 80px;
 }
 
 [data-motion="reduced"] *,
