@@ -2512,21 +2512,35 @@ video::media-controls { display: none !important; }
 }
 
 .dj-mode-btn {
-  width: 40px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   height: 40px;
-  padding: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
+  padding: 0 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.08);
   border: 1px solid var(--border);
   color: var(--text-dim);
-  font-size: 15px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
   backdrop-filter: blur(8px);
+}
+
+.dj-mode-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.dj-mode-text {
+  white-space: nowrap;
 }
 
 .dj-mode-btn.active {
   background: var(--accent);
   border-color: var(--accent);
   color: white;
+  box-shadow: 0 0 12px var(--accent);
 }
 
 .dj-reactions {
@@ -2553,7 +2567,7 @@ video::media-controls { display: none !important; }
 }
 
 .dj-sidebar {
-  width: 280px;
+  width: 340px;
   background: var(--surface);
   border-left: 1px solid var(--border);
   display: flex;
@@ -2653,12 +2667,12 @@ video::media-controls { display: none !important; }
 }
 
 .dj-track-group-header {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-dim);
-  padding: 4px 12px 2px;
+  color: var(--accent);
+  padding: 6px 12px 3px;
 }
 
 .dj-track-text {
@@ -2673,7 +2687,7 @@ video::media-controls { display: none !important; }
 }
 
 .dj-track-artist {
-  font-size: 11px;
+  font-size: 15px;
   color: var(--text-dim);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2716,8 +2730,17 @@ video::media-controls { display: none !important; }
   color: white;
 }
 
+.dj-track-art {
+  width: 40px;
+  height: 40px;
+  border-radius: 5px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--surface-light);
+}
+
 .dj-track-name {
-  font-size: 13px;
+  font-size: 19px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2725,7 +2748,7 @@ video::media-controls { display: none !important; }
 }
 
 .dj-track-duration {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--text-dim);
   margin-left: 8px;
 }

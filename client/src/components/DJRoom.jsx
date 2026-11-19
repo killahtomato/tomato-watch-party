@@ -407,6 +407,14 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
       onDragEnd={handleDragEnd}
     >
       {isDJ && isPlainList && <span className="dj-drag-handle" title="Drag to reorder">⋮⋮</span>}
+      {track.hasArt && (
+        <img
+          className="dj-track-art"
+          src={`/api/audio-art/${encodeURIComponent(track.name)}`}
+          alt=""
+          loading="lazy"
+        />
+      )}
       <span className="dj-track-text">
         <span className="dj-track-name">{track.title || track.displayName}</span>
         {track.artist && <span className="dj-track-artist">{track.artist}</span>}
@@ -462,16 +470,22 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
             <button
               className={`dj-mode-btn ${playbackState.shuffle ? 'active' : ''}`}
               onClick={handleToggleShuffle}
+              aria-pressed={playbackState.shuffle}
               title={playbackState.shuffle ? 'Shuffle on' : 'Shuffle off'}
             >
-              🔀
+              <span className="dj-mode-icon">🔀</span>
+              <span className="dj-mode-text">Shuffle</span>
             </button>
             <button
               className={`dj-mode-btn ${playbackState.repeat !== 'off' ? 'active' : ''}`}
               onClick={handleCycleRepeat}
+              aria-pressed={playbackState.repeat !== 'off'}
               title={`Repeat: ${playbackState.repeat}`}
             >
-              {playbackState.repeat === 'one' ? '🔂' : '🔁'}
+              <span className="dj-mode-icon">{playbackState.repeat === 'one' ? '🔂' : '🔁'}</span>
+              <span className="dj-mode-text">
+                {playbackState.repeat === 'one' ? 'Repeat 1' : playbackState.repeat === 'all' ? 'Repeat All' : 'Repeat Off'}
+              </span>
             </button>
             {playbackState.isPlaying ? (
               <button onClick={handlePause}>⏸ Pause</button>
