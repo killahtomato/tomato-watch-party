@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import AudioVisualizer from '@client/components/AudioVisualizer.jsx';
 import { applyOrder } from '@client/utils/order.js';
+import { useSettings } from '@client/hooks/useSettings.js';
 import { readSettings, writeSettings } from '../utils/settings.js';
 import DJTrackList from './DJTrackList.jsx';
 
@@ -13,6 +14,7 @@ function formatTime(seconds) {
 
 export default function DJRoom({ emit, on, sessionData, userName, unlocked, isActive = true }) {
   const saved = useRef(readSettings()).current;
+  const settings = useSettings();
   const audioRef = useRef(null);
   const [playbackState, setPlaybackState] = useState(
     sessionData?.playbackState || { track: null, isPlaying: false, currentTime: 0 }
@@ -147,13 +149,15 @@ export default function DJRoom({ emit, on, sessionData, userName, unlocked, isAc
     <div className="m-dj-room">
       <AudioVisualizer audioRef={audioRef} isPlaying={isActive && playbackState.isPlaying} unlocked={unlocked} />
 
-      <div className="dj-reactions">
-        {reactions.map(r => (
-          <div key={r.id} className="dj-reaction-float" style={{ left: `${r.posX}%` }}>
-            {r.emoji}
-          </div>
-        ))}
-      </div>
+      {!settings.reduceMotion && (
+        <div className="dj-reactions">
+          {reactions.map(r => (
+            <div key={r.id} className="dj-reaction-float" style={{ left: `${r.posX}%` }}>
+              {r.emoji}
+            </div>
+          ))}
+        </div>
+      )}
 
       {loading && (
         <div className="m-loading">

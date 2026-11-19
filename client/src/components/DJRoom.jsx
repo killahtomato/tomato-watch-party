@@ -365,13 +365,15 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
           </div>
         )}
 
-        <div className="dj-reactions">
-          {reactions.map(r => (
-            <div key={r.id} className="dj-reaction-float" style={{ left: `${r.posX}%` }}>
-              {r.emoji}
-            </div>
-          ))}
-        </div>
+        {!settings.reduceMotion && (
+          <div className="dj-reactions">
+            {reactions.map(r => (
+              <div key={r.id} className="dj-reaction-float" style={{ left: `${r.posX}%` }}>
+                {r.emoji}
+              </div>
+            ))}
+          </div>
+        )}
 
         {isDJ && playbackState.track && (
           <div className="dj-controls">
@@ -448,7 +450,7 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
           ))}
         </div>
 
-        {reactionsEnabled && (
+        {reactionsEnabled && !settings.reduceMotion && (
           <div className="dj-reaction-bar">
             {['🍾', '💸', '❄️', '🤘'].map(emoji => (
               <button key={emoji} className="dj-reaction-btn" onClick={() => handleReaction(emoji)}>

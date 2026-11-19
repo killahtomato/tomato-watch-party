@@ -1,8 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
+import { useSettings } from '../hooks/useSettings.js';
 
 const REACTION_EMOJIS = ['👏', '😂', '😱', '❤️'];
 
 export default function ThrowButton({ onThrow, on, reactionsEnabled, onReaction }) {
+  const settings = useSettings();
   const [throwState, setThrowState] = useState({
     tomato: { remaining: 0, count: 0 },
     popcorn: { remaining: 0, count: 0 },
@@ -51,6 +53,8 @@ export default function ThrowButton({ onThrow, on, reactionsEnabled, onReaction 
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  if (settings.reduceMotion) return null;
 
   const renderDots = (item, emoji) => {
     const count = throwState[item].count;

@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useSettings } from '@client/hooks/useSettings.js';
 
 const MOVIE_REACTIONS = ['👏', '😂', '😱', '❤️'];
 const DJ_REACTIONS = ['🍾', '💸', '❄️', '🤘'];
 
 export default function ActionBar({ room, on, emit }) {
+  const settings = useSettings();
   const [throwState, setThrowState] = useState({
     tomato: { count: 0, resetAt: 0 },
     popcorn: { count: 0, resetAt: 0 },
@@ -58,6 +60,8 @@ export default function ActionBar({ room, on, emit }) {
     if (room === 'movie') emit('reaction', { emoji });
     else emit('dj:reaction', { emoji });
   }, [emit, room]);
+
+  if (settings.reduceMotion) return null;
 
   return (
     <div className="mobile-action-bar">

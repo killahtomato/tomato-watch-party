@@ -63,7 +63,7 @@ Open the ⚙️ Settings tab on desktop or the gear in the mobile header. Prefer
 
 - **Theme** — 15 themes (Tomato Dark, Light, AMOLED, Midnight, Forest, Ocean, Sunset, Sakura, Grape, Amber, Espresso, Mono, Cyberpunk, Crimson, Frost) and 14 accent colors.
 - **Follow system theme** — match the OS color scheme.
-- **Reduce motion** — snap drawer and overlay animations instead of sliding them.
+- **Reduce motion** — snap drawer and overlay animations instead of sliding them, and hide throw/reaction buttons and their effects for that user.
 - **Playback** — default quality, auto-play next, and default volume.
 - **Web** — preferred anime source and default audio (sub/dub).
 - **Chat** — chat text size and subtitle size (Small/Medium/Large).

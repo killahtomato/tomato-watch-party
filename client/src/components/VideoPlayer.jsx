@@ -600,28 +600,30 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
         ))}
       </div>
 
-      <div className="throw-overlay">
-        {throws.map((t) => {
-          const isThrower = t.throwerId === myUserId;
-          const isSplatter = splattering[t.id];
-          const animClass = isThrower ? 'throw-firstperson' : t.throwerSide === 'left' ? 'throw-from-left' : 'throw-from-right';
-          const style = isThrower
-            ? { '--throw-x': `${46 + Math.random() * 8}%`, '--throw-y': `${55 + Math.random() * 25}%` }
-            : { '--throw-start-y': `${5 + Math.random() * 20}%`, '--throw-end-x': t.throwerSide === 'left' ? `${40 + Math.random() * 15}%` : `${45 + Math.random() * 15}%`, '--throw-end-y': `${30 + Math.random() * 30}%` };
-          return (
-            <div key={t.id} className={`throw-item ${animClass} ${isSplatter ? 'splatter' : ''}`} style={style}>
-              {isSplatter ? (t.item === 'tomato' ? '🔴' : '💛') : (t.item === 'tomato' ? '🍅' : '🍿')}
-              {!isSplatter && <span className="throw-name">{t.name}</span>}
+      {!settings.reduceMotion && (
+        <div className="throw-overlay">
+          {throws.map((t) => {
+            const isThrower = t.throwerId === myUserId;
+            const isSplatter = splattering[t.id];
+            const animClass = isThrower ? 'throw-firstperson' : t.throwerSide === 'left' ? 'throw-from-left' : 'throw-from-right';
+            const style = isThrower
+              ? { '--throw-x': `${46 + Math.random() * 8}%`, '--throw-y': `${55 + Math.random() * 25}%` }
+              : { '--throw-start-y': `${5 + Math.random() * 20}%`, '--throw-end-x': t.throwerSide === 'left' ? `${40 + Math.random() * 15}%` : `${45 + Math.random() * 15}%`, '--throw-end-y': `${30 + Math.random() * 30}%` };
+            return (
+              <div key={t.id} className={`throw-item ${animClass} ${isSplatter ? 'splatter' : ''}`} style={style}>
+                {isSplatter ? (t.item === 'tomato' ? '🔴' : '💛') : (t.item === 'tomato' ? '🍅' : '🍿')}
+                {!isSplatter && <span className="throw-name">{t.name}</span>}
+              </div>
+            );
+          })}
+          {reactions.map((r) => (
+            <div key={r.id} className="reaction-float" style={{ left: `${r.posX}%` }}>
+              {r.emoji}
+              <span className="reaction-name">{r.name}</span>
             </div>
-          );
-        })}
-        {reactions.map((r) => (
-          <div key={r.id} className="reaction-float" style={{ left: `${r.posX}%` }}>
-            {r.emoji}
-            <span className="reaction-name">{r.name}</span>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {currentSubText && (
         <div className="subtitle-overlay">

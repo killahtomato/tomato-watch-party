@@ -2,9 +2,11 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import Hls from 'hls.js';
 import { parseVtt } from '../utils/subtitles';
 import { readSettings, writeSettings } from '../utils/settings.js';
+import { useSettings } from '@client/hooks/useSettings.js';
 
 export default function WebRoom({ webState, emit, on, isActive = true, unlocked = false, userId }) {
   const saved = useRef(readSettings()).current;
+  const settings = useSettings();
   const videoRef = useRef(null);
   const containerRef = useRef(null);
   const controlsTimerRef = useRef(null);
@@ -346,32 +348,34 @@ export default function WebRoom({ webState, emit, on, isActive = true, unlocked 
         </div>
       )}
 
-      <div className="throw-overlay">
-        {throws.map(t => {
-          const isThrower = t.throwerId === myUserId;
-          const isSplatter = splattering[t.id];
-          const animClass = isThrower ? 'throw-firstperson' : t.throwerSide === 'left' ? 'throw-from-left' : 'throw-from-right';
-          const style = isThrower
-            ? { '--throw-x': `${46 + Math.random() * 8}%`, '--throw-y': `${55 + Math.random() * 25}%` }
-            : {
-              '--throw-start-y': `${5 + Math.random() * 20}%`,
-              '--throw-end-x': t.throwerSide === 'left' ? `${40 + Math.random() * 15}%` : `${45 + Math.random() * 15}%`,
-              '--throw-end-y': `${30 + Math.random() * 30}%`,
-            };
-          return (
-            <div key={t.id} className={`throw-item ${animClass} ${isSplatter ? 'splatter' : ''}`} style={style}>
-              {isSplatter ? (t.item === 'tomato' ? '🔴' : '💛') : (t.item === 'tomato' ? '🍅' : '🍿')}
-              {!isSplatter && <span className="throw-name">{t.name}</span>}
+      {!settings.reduceMotion && (
+        <div className="throw-overlay">
+          {throws.map(t => {
+            const isThrower = t.throwerId === myUserId;
+            const isSplatter = splattering[t.id];
+            const animClass = isThrower ? 'throw-firstperson' : t.throwerSide === 'left' ? 'throw-from-left' : 'throw-from-right';
+            const style = isThrower
+              ? { '--throw-x': `${46 + Math.random() * 8}%`, '--throw-y': `${55 + Math.random() * 25}%` }
+              : {
+                '--throw-start-y': `${5 + Math.random() * 20}%`,
+                '--throw-end-x': t.throwerSide === 'left' ? `${40 + Math.random() * 15}%` : `${45 + Math.random() * 15}%`,
+                '--throw-end-y': `${30 + Math.random() * 30}%`,
+              };
+            return (
+              <div key={t.id} className={`throw-item ${animClass} ${isSplatter ? 'splatter' : ''}`} style={style}>
+                {isSplatter ? (t.item === 'tomato' ? '🔴' : '💛') : (t.item === 'tomato' ? '🍅' : '🍿')}
+                {!isSplatter && <span className="throw-name">{t.name}</span>}
+              </div>
+            );
+          })}
+          {reactions.map(r => (
+            <div key={r.id} className="reaction-float" style={{ left: `${r.posX}%` }}>
+              {r.emoji}
+              <span className="reaction-name">{r.name}</span>
             </div>
-          );
-        })}
-        {reactions.map(r => (
-          <div key={r.id} className="reaction-float" style={{ left: `${r.posX}%` }}>
-            {r.emoji}
-            <span className="reaction-name">{r.name}</span>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       <div className={`m-movie-controls ${showControls ? 'visible' : 'hidden'}`}>
         <div className="m-controls-row">
