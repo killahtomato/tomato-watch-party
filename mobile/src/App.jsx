@@ -8,7 +8,7 @@ import ActionBar from './components/ActionBar.jsx';
 import MovieRoom from './components/MovieRoom.jsx';
 import DJRoom from './components/DJRoom.jsx';
 import SettingsPanel from '@client/components/SettingsPanel.jsx';
-import { applyTheme } from '@client/utils/theme.js';
+import { initSettings } from '@client/utils/settings.js';
 
 const ROOM_KEY = 'twp:mobile-room';
 
@@ -35,7 +35,7 @@ export default function App() {
   useEffect(() => { chatOpenRef.current = chatOpen; }, [chatOpen]);
 
   useEffect(() => {
-    applyTheme();
+    initSettings();
   }, []);
 
   useEffect(() => {

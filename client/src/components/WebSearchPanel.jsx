@@ -1,4 +1,6 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { getSettings, updateSettings } from '../utils/settings.js';
+import { useSettings } from '../hooks/useSettings.js';
 
 const SOURCES = [
   ['all', 'All sources'],
@@ -13,22 +15,23 @@ const SOURCES = [
   ['tpb', 'tpb'],
 ];
 
-export default function WebSearchPanel({ emit, isHost, onPlay }) {
+export default function WebSearchPanel({ emit, on, isHost, onPlay }) {
   const [query, setQuery] = useState('');
-  const [source, setSource] = useState('all');
+  const [source, setSource] = useState(() => getSettings().webSource);
   const [results, setResults] = useState([]);
   const [selectedResult, setSelectedResult] = useState(null);
   const [episodes, setEpisodes] = useState([]);
   const [episodeFilter, setEpisodeFilter] = useState('');
   const [selectedEpisode, setSelectedEpisode] = useState(null);
   const [modes, setModes] = useState([]);
-  const [mode, setMode] = useState('sub');
+  const [mode, setMode] = useState(() => getSettings().webMode);
   const [resolved, setResolved] = useState(null);
   const [selectedQuality, setSelectedQuality] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [playableKeys, setPlayableKeys] = useState(() => new Set());
   const [probeStatus, setProbeStatus] = useState('idle');
+  const settings = useSettings();
 
   const run = useCallback((event, data) => new Promise((resolvePromise, rejectPromise) => {
     emit(event, data, (response) => {
@@ -113,6 +116,55 @@ export default function WebSearchPanel({ emit, isHost, onPlay }) {
     }
   }, [busy, run]);
 
+  const resolveEpisode = useCallback(async (episode, nextMode) => {
+    const response = await run('web:resolve', {
+      source: selectedResult.source,
+      id: selectedResult.id,
+      ep: episode.key,
+      mode: nextMode,
+    });
+    const streams = (response.streams || []).filter((s) => s.playable !== false);
+    const result = { ...response, streams };
+    setResolved(result);
+    setSelectedQuality(streams.length > 0 ? streams[0].quality : '');
+    return result;
+  }, [run, selectedResult]);
+
+  const playEpisode = useCallback(async (episode, nextMode) => {
+    if (!selectedResult) return;
+    setBusy(true);
+    setError('');
+    setSelectedEpisode(episode);
+    setMode(nextMode);
+    try {
+      const result = await resolveEpisode(episode, nextMode);
+      const stream = result.streams[0];
+      if (!stream) {
+        setError('No directly playable streams for that episode.');
+        return;
+      }
+      onPlay({
+        source: selectedResult.source,
+        id: selectedResult.id,
+        title: `${selectedResult.title} — Episode ${episode.number}`,
+        episodeKey: episode.key,
+        episodeNumber: String(episode.number),
+        mode: nextMode,
+        quality: stream.quality,
+        type: stream.type,
+        proxyUrl: stream.proxyUrl,
+        referrer: stream.referrer,
+        origin: stream.origin,
+        subtitles: result.subtitles || [],
+        live: false,
+      });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }, [selectedResult, resolveEpisode, onPlay]);
+
   const handlePickEpisode = useCallback(async (episode) => {
     if (busy) return;
     setBusy(true);
@@ -131,46 +183,53 @@ export default function WebSearchPanel({ emit, isHost, onPlay }) {
         supported = modeResponse.modes || supported;
       } catch {}
       setModes(supported);
-      setMode('sub');
-
-      const response = await run('web:resolve', {
-        source: selectedResult.source,
-        id: selectedResult.id,
-        ep: episode.key,
-        mode: 'sub',
-      });
-      const streams = (response.streams || []).filter((s) => s.playable !== false);
-      setResolved({ ...response, streams });
-      setSelectedQuality(streams.length > 0 ? streams[0].quality : '');
-      if (streams.length === 0) setError('No directly playable streams for that episode.');
+      const nextMode = supported.includes(settings.webMode) ? settings.webMode : 'sub';
+      setMode(nextMode);
+      const result = await resolveEpisode(episode, nextMode);
+      if (result.streams.length === 0) setError('No directly playable streams for that episode.');
     } catch (err) {
       setError(err.message);
     } finally {
       setBusy(false);
     }
-  }, [busy, run, selectedResult]);
+  }, [busy, run, selectedResult, resolveEpisode, settings.webMode]);
 
   const handleModeChange = useCallback(async (nextMode) => {
     if (!selectedResult || !selectedEpisode) return;
     setMode(nextMode);
+    updateSettings({ webMode: nextMode });
     setBusy(true);
     setError('');
     try {
-      const response = await run('web:resolve', {
-        source: selectedResult.source,
-        id: selectedResult.id,
-        ep: selectedEpisode.key,
-        mode: nextMode,
-      });
-      const streams = (response.streams || []).filter((s) => s.playable !== false);
-      setResolved({ ...response, streams });
-      setSelectedQuality(streams.length > 0 ? streams[0].quality : '');
+      await resolveEpisode(selectedEpisode, nextMode);
     } catch (err) {
       setError(err.message);
     } finally {
       setBusy(false);
     }
-  }, [selectedResult, selectedEpisode, run]);
+  }, [selectedResult, selectedEpisode, resolveEpisode]);
+
+  const episodesRef = useRef(episodes);
+  episodesRef.current = episodes;
+  const selectedResultRef = useRef(selectedResult);
+  selectedResultRef.current = selectedResult;
+  const lastWebRef = useRef(null);
+
+  useEffect(() => {
+    if (!on) return undefined;
+    const handler = (state) => {
+      const previous = lastWebRef.current;
+      lastWebRef.current = state.web;
+      if (previous && !state.web && settings.autoplayNext && selectedResultRef.current) {
+        const list = episodesRef.current;
+        const index = list.findIndex((episode) => episode.key === previous.episodeKey);
+        const next = index >= 0 ? list[index + 1] : null;
+        if (next) playEpisode(next, settings.webMode);
+      }
+    };
+    const unsub = on('web:playbackUpdate', handler);
+    return () => unsub?.();
+  }, [on, settings.autoplayNext, settings.webMode, playEpisode]);
 
   const handlePlay = useCallback(() => {
     if (!selectedResult || !selectedEpisode || !resolved) return;
@@ -223,7 +282,14 @@ export default function WebSearchPanel({ emit, isHost, onPlay }) {
           onChange={(e) => setQuery(e.target.value)}
           disabled={busy}
         />
-        <select value={source} onChange={(e) => setSource(e.target.value)} disabled={busy}>
+        <select
+          value={source}
+          onChange={(e) => {
+            setSource(e.target.value);
+            updateSettings({ webSource: e.target.value });
+          }}
+          disabled={busy}
+        >
           {SOURCES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
         <button type="submit" disabled={busy || !query.trim()}>Search</button>

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Hls from 'hls.js';
 import ThrowButton from './ThrowButton.jsx';
+import { useSettings } from '../hooks/useSettings.js';
+import { updateSettings } from '../utils/settings.js';
 
 function parseVtt(text) {
   const lines = text.trim().split(/\r?\n/);
@@ -44,6 +46,14 @@ export default function WebPlayer({
   const seekResumeTimeoutRef = useRef(null);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
+  const settings = useSettings();
+
+  useEffect(() => { setVolume(settings.volume); }, [settings.volume]);
+
+  const handleVolumeChange = useCallback((value) => {
+    setVolume(value);
+    updateSettings({ volume: value });
+  }, []);
   const [throws, setThrows] = useState([]);
   const [splattering, setSplattering] = useState({});
   const [reactions, setReactions] = useState([]);
@@ -358,7 +368,7 @@ export default function WebPlayer({
   }
 
   return (
-    <div className="video-player">
+    <div className="video-player web-player">
       {videoEnded && (
         <div className="movie-ended-overlay">
           <div className="movie-ended-content">
@@ -441,7 +451,7 @@ export default function WebPlayer({
               max="1"
               step="0.05"
               value={volume}
-              onChange={(e) => setVolume(parseFloat(e.target.value))}
+              onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
               className="volume-slider"
             />
           </div>

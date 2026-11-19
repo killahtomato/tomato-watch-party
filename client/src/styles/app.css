@@ -284,6 +284,19 @@ input:focus {
   max-width: 80%;
 }
 
+.web-player .subtitle-overlay {
+  bottom: 70px;
+}
+
+[data-motion="reduced"] *,
+[data-motion="reduced"] *::before,
+[data-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
 .subtitle-overlay span {
   display: inline-block;
   padding: 8px 16px;

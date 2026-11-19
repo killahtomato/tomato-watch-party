@@ -126,3 +126,84 @@
   color: var(--text);
   background: rgba(255, 255, 255, 0.05);
 }
+
+.setting-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+}
+
+.setting-toggle-label {
+  flex: 1;
+}
+
+.setting-toggle .toggle-track {
+  flex-shrink: 0;
+}
+
+.setting-toggle.on .toggle-track {
+  background: var(--accent);
+}
+
+.setting-toggle.on .toggle-track .toggle-thumb {
+  transform: translateX(16px);
+}
+
+.setting-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.setting-field > span {
+  color: var(--text-dim);
+}
+
+.setting-field select,
+.setting-field input[type="range"] {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.setting-field input[type="range"] {
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.segmented {
+  display: flex;
+  gap: 4px;
+}
+
+.segmented button {
+  padding: 6px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.segmented button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}

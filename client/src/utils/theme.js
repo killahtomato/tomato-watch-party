@@ -25,45 +25,13 @@ export const ACCENTS = [
   { id: 'pink', name: 'Pink', color: '#ff66aa' },
 ];
 
-const THEME_KEY = 'twp.theme';
-const ACCENT_KEY = 'twp.accent';
-
-function read(key, fallback) {
-  try {
-    return localStorage.getItem(key) || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function write(key, value) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {}
-}
-
-export function getTheme() {
-  return read(THEME_KEY, 'dark');
-}
-
-export function getAccent() {
-  return read(ACCENT_KEY, 'red');
-}
-
-export function applyTheme({ theme, accent } = {}) {
-  const root = document.documentElement;
-  const nextTheme = theme || getTheme();
-  const nextAccent = accent || getAccent();
-  root.dataset.theme = nextTheme;
-  root.dataset.accent = nextAccent;
-  write(THEME_KEY, nextTheme);
-  write(ACCENT_KEY, nextAccent);
-}
-
-export function setTheme(theme) {
-  applyTheme({ theme });
-}
-
-export function setAccent(accent) {
-  applyTheme({ accent });
-}
+export {
+  getSettings,
+  updateSettings,
+  applySettings,
+  initSettings,
+  getTheme,
+  getAccent,
+  setTheme,
+  setAccent,
+} from './settings.js';

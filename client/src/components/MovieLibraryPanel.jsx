@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { getSettings } from '../utils/settings.js';
 
 function formatTime(seconds) {
   if (!isFinite(seconds) || seconds < 0) return '0:00';
@@ -55,7 +56,7 @@ export default function MovieLibraryPanel({
 
   const handlePlayMovie = (movieName) => {
     onOpenChange(false);
-    emit('host:playMovie', { movie: movieName, quality: '1080p' }, (response) => {
+    emit('host:playMovie', { movie: movieName, quality: getSettings().defaultQuality }, (response) => {
       if (response?.error) alert(response.error);
     });
   };

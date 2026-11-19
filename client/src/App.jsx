@@ -10,7 +10,8 @@ import WebSearchPanel from './components/WebSearchPanel.jsx';
 import DJRoom from './components/DJRoom.jsx';
 import RoomSwitcher from './components/RoomSwitcher.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
-import { applyTheme } from './utils/theme.js';
+import { initSettings } from './utils/settings.js';
+import { useSettings } from './hooks/useSettings.js';
 import { applyOrder } from './utils/order.js';
 
 export default function App() {
@@ -40,9 +41,10 @@ export default function App() {
   const [webProgress, setWebProgress] = useState({ current: 0, duration: 0, live: false });
   const [webPanelOpen, setWebPanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const settings = useSettings();
 
   useEffect(() => {
-    applyTheme();
+    initSettings();
   }, []);
 
   const handleSeekPercent = useCallback((pct) => {
@@ -345,7 +347,7 @@ export default function App() {
               <button className="movie-panel-close" onClick={() => setWebPanelOpen(false)}>✕</button>
             </div>
           </div>
-          <WebSearchPanel emit={emit} isHost onPlay={handleWebPlay} />
+          <WebSearchPanel emit={emit} on={on} isHost onPlay={handleWebPlay} />
         </div>
       )}
 
@@ -431,9 +433,9 @@ export default function App() {
             const signal = getSignalBars(v.pingMs);
             return (
               <div key={v.id} className="viewer-item">
-                <span className={`viewer-dot ${status}`}></span>
-                <span className="viewer-signal">{signal}</span>
-                {v.pingMs > 0 && <span className="viewer-ping">{v.pingMs}ms</span>}
+                {settings.showHealth && <span className={`viewer-dot ${status}`}></span>}
+                {settings.showHealth && <span className="viewer-signal">{signal}</span>}
+                {settings.showHealth && v.pingMs > 0 && <span className="viewer-ping">{v.pingMs}ms</span>}
                 <span className="viewer-name">{v.name}</span>
                 {v.isHost && <span className="viewer-host-icon">👑</span>}
                 {isHost && currentRoom === 'movie' && (

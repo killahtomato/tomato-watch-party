@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import AudioVisualizer from './AudioVisualizer.jsx';
 import { applyOrder } from '../utils/order.js';
+import { useSettings } from '../hooks/useSettings.js';
+import { updateSettings } from '../utils/settings.js';
 
 export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActive = true, seekRef, playRef, pauseRef, onSeekPercent, onPercentUpdate, playbackPercent = 0 }) {
   const audioRef = useRef(null);
@@ -19,6 +21,14 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
   const [trackListOpen, setTrackListOpen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
+  const settings = useSettings();
+
+  useEffect(() => { setVolume(settings.volume); }, [settings.volume]);
+
+  const handleVolumeChange = useCallback((value) => {
+    setVolume(value);
+    updateSettings({ volume: value });
+  }, []);
   const [dragIndex, setDragIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
 
@@ -405,7 +415,7 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
             max="1"
             step="0.05"
             value={volume}
-            onChange={(e) => setVolume(parseFloat(e.target.value))}
+            onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
             className="volume-slider"
           />
         </div>

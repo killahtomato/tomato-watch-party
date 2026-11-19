@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import ThrowButton from './ThrowButton.jsx';
+import { useSettings } from '../hooks/useSettings.js';
+import { updateSettings } from '../utils/settings.js';
 
 const QUALITY_PRESETS = ['1080p', '720p', '480p'];
 
@@ -63,6 +65,10 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
   const [movieEnded, setMovieEnded] = useState(false);
   const [videoError, setVideoError] = useState(false);
   const [currentQuality, setCurrentQuality] = useState('1080p');
+  const settings = useSettings();
+
+  useEffect(() => { setVolume(settings.volume); }, [settings.volume]);
+  useEffect(() => { setCurrentQuality(settings.defaultQuality); }, [settings.defaultQuality]);
   const [bufferHealth, setBufferHealth] = useState(0);
   const [pingMs, setPingMs] = useState(0);
   const [showBanner, setShowBanner] = useState(false);
@@ -140,7 +146,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
       }, 2000);
     };
     const handleEnded = () => {
-      if (isHost) {
+      if (isHost && settings.autoplayNext) {
         const list = movies || [];
         const currentIndex = list.findIndex(m => m.name === playbackState.movie);
         const nextMovie = currentIndex >= 0 ? list[currentIndex + 1] : null;
@@ -189,7 +195,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
       clearInterval(poll1);
       clearInterval(poll2);
     };
-  }, [onTimeUpdate, streamUrl, isHost, emit, movies, playRef, playbackState.movie]);
+  }, [onTimeUpdate, streamUrl, isHost, emit, movies, playRef, playbackState.movie, settings.autoplayNext]);
 
   useEffect(() => {
     if (!playbackState?.movie) return;
@@ -482,11 +488,17 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
   const handleManualQualityChange = useCallback((quality) => {
     if (quality !== currentQuality) {
       setCurrentQuality(quality);
+      updateSettings({ defaultQuality: quality });
       setShowBanner(false);
       if (isHost) emit('host:qualityChange', { quality });
       else addToast(`Switched to ${quality}`, 'info');
     }
   }, [currentQuality, isHost, emit, addToast]);
+
+  const handleVolumeChange = useCallback((value) => {
+    setVolume(value);
+    updateSettings({ volume: value });
+  }, []);
 
   if (!playbackState.movie) {
     return (
@@ -631,7 +643,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
             <button className="mute-btn" onClick={() => setIsMuted(m => !m)} title={isMuted ? 'Unmute' : 'Mute'}>
               {isMuted ? '🔇' : volume > 0.5 ? '🔊' : volume > 0 ? '🔉' : '🔈'}
             </button>
-            <input type="range" min="0" max="1" step="0.05" value={volume} onChange={(e) => setVolume(parseFloat(e.target.value))} className="volume-slider" />
+            <input type="range" min="0" max="1" step="0.05" value={volume} onChange={(e) => handleVolumeChange(parseFloat(e.target.value))} className="volume-slider" />
           </div>
         </div>
       </div>
