@@ -143,13 +143,13 @@
 }
 
 [data-theme="sepia"] {
-  --bg: #f3ead8;
-  --surface: #fbf4e4;
-  --surface-light: #eadfc6;
-  --text: #2e2115;
-  --text-dim: #85705a;
-  --border: #dccba9;
-  --chat-bg: #eee2c8;
+  --bg: #e9dfca;
+  --surface: #f3ead3;
+  --surface-light: #e0d3b4;
+  --text: #2c1f13;
+  --text-dim: #7e6a52;
+  --border: #d1bd97;
+  --chat-bg: #e4d7ba;
 }
 
 :root,
