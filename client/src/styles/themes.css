@@ -142,14 +142,14 @@
   --chat-bg: #1a0d10;
 }
 
-[data-theme="frost"] {
-  --bg: #eef2f6;
-  --surface: #ffffff;
-  --surface-light: #e2e8f0;
-  --text: #1c2733;
-  --text-dim: #5d6b7a;
-  --border: #d3dbe4;
-  --chat-bg: #e6ecf2;
+[data-theme="sepia"] {
+  --bg: #f3ead8;
+  --surface: #fbf4e4;
+  --surface-light: #eadfc6;
+  --text: #2e2115;
+  --text-dim: #85705a;
+  --border: #dccba9;
+  --chat-bg: #eee2c8;
 }
 
 :root,

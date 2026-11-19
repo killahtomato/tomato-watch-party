@@ -13,7 +13,7 @@ export const THEMES = [
   { id: 'mono', name: 'Mono', swatch: ['#101010', '#909090'] },
   { id: 'cyberpunk', name: 'Cyberpunk', swatch: ['#0d0a14', '#ff66aa'] },
   { id: 'crimson', name: 'Crimson', swatch: ['#140a0c', '#ff4444'] },
-  { id: 'frost', name: 'Frost', swatch: ['#eef2f6', '#4488ff'] },
+  { id: 'sepia', name: 'Sepia', swatch: ['#f3ead8', '#c08a3e'] },
 ];
 
 export const ACCENTS = [

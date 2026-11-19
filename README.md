@@ -61,7 +61,7 @@ If you cloned with `git clone --recursive`, step 2 is already done.
 
 Open the ⚙️ Settings tab on desktop or the gear in the mobile header. Preferences are stored per browser (localStorage) and apply instantly.
 
-- **Theme** — 15 themes (Tomato Dark, Light, AMOLED, Midnight, Forest, Ocean, Sunset, Sakura, Grape, Amber, Espresso, Mono, Cyberpunk, Crimson, Frost) and 14 accent colors.
+- **Theme** — 15 themes (Tomato Dark, Light, AMOLED, Midnight, Forest, Ocean, Sunset, Sakura, Grape, Amber, Espresso, Mono, Cyberpunk, Crimson, Sepia) and 14 accent colors.
 - **Follow system theme** — match the OS color scheme.
 - **Reduce motion** — snap drawer and overlay animations instead of sliding them, and hide throw/reaction buttons and their effects for that user.
 - **Playback** — default quality, auto-play next, show subtitles, and default volume.
