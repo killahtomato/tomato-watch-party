@@ -132,6 +132,26 @@
   --chat-bg: #110c1c;
 }
 
+[data-theme="crimson"] {
+  --bg: #140a0c;
+  --surface: #221216;
+  --surface-light: #38181e;
+  --text: #ffe8ea;
+  --text-dim: #c08a92;
+  --border: #4a2028;
+  --chat-bg: #1a0d10;
+}
+
+[data-theme="frost"] {
+  --bg: #eef2f6;
+  --surface: #ffffff;
+  --surface-light: #e2e8f0;
+  --text: #1c2733;
+  --text-dim: #5d6b7a;
+  --border: #d3dbe4;
+  --chat-bg: #e6ecf2;
+}
+
 :root,
 [data-accent="red"] {
   --accent: #ff4444;
@@ -171,4 +191,34 @@
 [data-accent="pink"] {
   --accent: #ff66aa;
   --accent-alt: #ff99cc;
+}
+
+[data-accent="lime"] {
+  --accent: #aaff44;
+  --accent-alt: #ddff88;
+}
+
+[data-accent="sky"] {
+  --accent: #44bbff;
+  --accent-alt: #88ddff;
+}
+
+[data-accent="indigo"] {
+  --accent: #7766ff;
+  --accent-alt: #aa99ff;
+}
+
+[data-accent="rose"] {
+  --accent: #ff5577;
+  --accent-alt: #ff88aa;
+}
+
+[data-accent="gold"] {
+  --accent: #ffd244;
+  --accent-alt: #ffe488;
+}
+
+[data-accent="fuchsia"] {
+  --accent: #ff44dd;
+  --accent-alt: #ff88ee;
 }

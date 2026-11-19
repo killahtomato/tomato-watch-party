@@ -12,6 +12,8 @@ export const THEMES = [
   { id: 'espresso', name: 'Espresso', swatch: ['#140f0c', '#b09888'] },
   { id: 'mono', name: 'Mono', swatch: ['#101010', '#909090'] },
   { id: 'cyberpunk', name: 'Cyberpunk', swatch: ['#0d0a14', '#ff66aa'] },
+  { id: 'crimson', name: 'Crimson', swatch: ['#140a0c', '#ff4444'] },
+  { id: 'frost', name: 'Frost', swatch: ['#eef2f6', '#4488ff'] },
 ];
 
 export const ACCENTS = [
@@ -23,6 +25,12 @@ export const ACCENTS = [
   { id: 'blue', name: 'Blue', color: '#4488ff' },
   { id: 'purple', name: 'Purple', color: '#aa66ff' },
   { id: 'pink', name: 'Pink', color: '#ff66aa' },
+  { id: 'lime', name: 'Lime', color: '#aaff44' },
+  { id: 'sky', name: 'Sky', color: '#44bbff' },
+  { id: 'indigo', name: 'Indigo', color: '#7766ff' },
+  { id: 'rose', name: 'Rose', color: '#ff5577' },
+  { id: 'gold', name: 'Gold', color: '#ffd244' },
+  { id: 'fuchsia', name: 'Fuchsia', color: '#ff44dd' },
 ];
 
 export {
