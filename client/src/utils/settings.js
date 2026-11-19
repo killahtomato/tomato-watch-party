@@ -37,7 +37,10 @@ function isUnset(key) {
 }
 
 function sanitize(key, value) {
-  if (typeof DEFAULTS[key] === 'boolean') return Boolean(value);
+  if (typeof DEFAULTS[key] === 'boolean') {
+    if (typeof value === 'string') return value.trim().toLowerCase() === 'true';
+    return Boolean(value);
+  }
   if (typeof DEFAULTS[key] === 'number') {
     const num = Number(value);
     if (!Number.isFinite(num)) return DEFAULTS[key];
