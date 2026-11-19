@@ -194,19 +194,21 @@ export default function App() {
 
       <ActionBar room={room} on={on} emit={emit} />
 
-      {chatOpen && (
-        <ChatPanel
-          userName={userName}
-          emit={emit}
-          on={on}
-          sessionData={sessionData}
-          onClose={() => setChatOpen(false)}
-        />
-      )}
+      <ChatPanel
+        open={chatOpen}
+        userName={userName}
+        emit={emit}
+        on={on}
+        sessionData={sessionData}
+        onClose={() => setChatOpen(false)}
+      />
 
-      {viewerPanelOpen && (
-        <ViewerPanel viewers={viewers} count={viewerCount} onClose={() => setViewerPanelOpen(false)} />
-      )}
+      <ViewerPanel
+        open={viewerPanelOpen}
+        viewers={viewers}
+        count={viewerCount}
+        onClose={() => setViewerPanelOpen(false)}
+      />
 
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
