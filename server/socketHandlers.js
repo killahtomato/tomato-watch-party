@@ -168,14 +168,19 @@ export function setupSocketHandlers(io) {
       }
 
       const side = Math.random() > 0.5 ? 'left' : 'right';
+      const hostRooms = socket.data?.hostRooms;
+      const isHostForRoom = Boolean(socket.data?.isHost && hostRooms && hostRooms.has(room));
       state.users.set(socket.id, {
         id: socket.id,
         name: finalName,
         joinedAt: Date.now(),
         side,
-        isHost: false,
+        isHost: isHostForRoom,
         room,
       });
+      if (isHostForRoom && !state.hostSocketId) {
+        state.hostSocketId = socket.id;
+      }
 
       socket.data.room = room;
 
