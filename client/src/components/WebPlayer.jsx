@@ -44,6 +44,7 @@ export default function WebPlayer({
   const startedRef = useRef(false);
   const resumeAfterSeekRef = useRef(false);
   const seekResumeTimeoutRef = useRef(null);
+  const hostInitialSyncRef = useRef(true);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const settings = useSettings();
@@ -80,12 +81,27 @@ export default function WebPlayer({
   }, [emit]);
 
   useEffect(() => {
+    playbackRef.current = {
+      isPlaying: Boolean(webState?.isPlaying),
+      currentTime: webState?.currentTime || 0,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     const video = videoRef.current;
     if (!video || !proxyUrl) return;
 
     let hls = null;
     startedRef.current = false;
+    hostInitialSyncRef.current = true;
     const startPlayback = () => {
+      if (hostInitialSyncRef.current && video.readyState >= 2) {
+        if (Math.abs(video.currentTime - playbackRef.current.currentTime) > 1) {
+          video.currentTime = playbackRef.current.currentTime;
+        }
+        hostInitialSyncRef.current = false;
+      }
       if (playbackRef.current.isPlaying) video.play().catch(() => {});
     };
 
@@ -173,7 +189,12 @@ export default function WebPlayer({
       if (!video || !proxyUrl) return;
 
       if (isHost) {
-        if (state.isPlaying && video.paused) video.play().catch(() => {});
+        if (hostInitialSyncRef.current && video.readyState >= 2) {
+          const diff = Math.abs(video.currentTime - state.currentTime);
+          if (diff > 1) video.currentTime = state.currentTime;
+          hostInitialSyncRef.current = false;
+        }
+        if (state.isPlaying && video.paused && video.readyState >= 2) video.play().catch(() => {});
         return;
       }
 
