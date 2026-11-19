@@ -250,16 +250,7 @@ export default function App() {
   return (
     <div className="app">
       <div className="main-area">
-        <RoomSwitcher currentRoom={currentRoom} onSwitch={handleRoomSwitch}>
-          <button
-            className="settings-btn"
-            onClick={() => setSettingsOpen(true)}
-            title="Settings"
-            aria-label="Settings"
-          >
-            ⚙️
-          </button>
-        </RoomSwitcher>
+        <RoomSwitcher currentRoom={currentRoom} onSwitch={handleRoomSwitch} />
 
         <div className="room-panes">
         <div className={`room-pane movie-pane ${currentRoom === 'movie' ? 'active' : 'inactive'}`}>
@@ -414,6 +405,15 @@ export default function App() {
             DJ Login
           </button>
         )}
+      </div>
+
+      <div
+        className={`settings-panel-tab${settingsOpen ? ' open' : ''}`}
+        onClick={() => setSettingsOpen((o) => !o)}
+        title="Settings"
+        aria-label="Settings"
+      >
+        ⚙️
       </div>
 
       <div className={`viewer-panel-tab${viewerPanelOpen ? ' open' : ''}`} onClick={() => setViewerPanelOpen(o => !o)}>

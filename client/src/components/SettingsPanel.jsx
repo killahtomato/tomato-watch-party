@@ -39,8 +39,6 @@ export default function SettingsPanel({ open, onClose }) {
     if (open) setSettings(getSettings());
   }, [open]);
 
-  if (!open) return null;
-
   const patch = (values) => setSettings(updateSettings(values));
   const handleTheme = (id) => {
     setTheme(id);
@@ -52,12 +50,11 @@ export default function SettingsPanel({ open, onClose }) {
   };
 
   return (
-    <div className="settings-overlay" onClick={onClose}>
-      <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="settings-header">
-          <h3>Settings</h3>
-          <button className="settings-close" onClick={onClose}>✕</button>
-        </div>
+    <div className={`settings-drawer${open ? ' open' : ''}`}>
+      <div className="settings-header">
+        <h3>Settings</h3>
+        <button className="settings-close" onClick={onClose}>✕</button>
+      </div>
 
         <div className="settings-section">
           <h4>Theme</h4>
@@ -172,7 +169,6 @@ export default function SettingsPanel({ open, onClose }) {
             onChange={(value) => patch({ showHealth: value })}
           />
         </div>
-      </div>
     </div>
   );
 }

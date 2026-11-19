@@ -1,26 +1,47 @@
-.settings-overlay {
+.settings-panel-tab {
+  --drawer-w: min(320px, 85vw);
   position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 48px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
-  padding: 16px;
+  cursor: pointer;
+  z-index: 101;
+  font-size: 14px;
+  transition: left 0.3s ease-out;
 }
 
-.settings-panel {
+.settings-panel-tab.open { left: var(--drawer-w); }
+.settings-panel-tab:hover { background: var(--surface-light); }
+
+.settings-drawer {
+  --drawer-w: min(320px, 85vw);
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: var(--drawer-w);
+  height: 100%;
   background: var(--surface);
   color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  width: 100%;
-  max-width: 540px;
-  max-height: 85vh;
+  border-right: 1px solid var(--border);
+  z-index: 100;
+  transform: translateX(calc(-1 * var(--drawer-w)));
+  transition: transform 0.3s ease-out;
   overflow-y: auto;
   padding: 16px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
 }
+
+.settings-drawer.open { transform: translateX(0); }
 
 .settings-header {
   display: flex;
@@ -110,22 +131,7 @@
 .accent-swatch.active {
   border-color: var(--text);
   box-shadow: 0 0 0 2px var(--surface);
-}
-
-.settings-btn {
-  padding: 6px 10px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.settings-btn:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.05);
-}
+ }
 
 .setting-toggle {
   display: flex;
