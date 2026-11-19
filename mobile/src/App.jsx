@@ -6,6 +6,7 @@ import ChatPanel from './components/ChatPanel.jsx';
 import ViewerPanel from './components/ViewerPanel.jsx';
 import ActionBar from './components/ActionBar.jsx';
 import MovieRoom from './components/MovieRoom.jsx';
+import WebRoom from './components/WebRoom.jsx';
 import DJRoom from './components/DJRoom.jsx';
 import SettingsPanel from '@client/components/SettingsPanel.jsx';
 import { initSettings } from '@client/utils/settings.js';
@@ -19,6 +20,7 @@ export default function App() {
   const [joinError, setJoinError] = useState(null);
   const [errorKey, setErrorKey] = useState(0);
   const [sessionData, setSessionData] = useState(null);
+  const [webState, setWebState] = useState(null);
   const [viewerCount, setViewerCount] = useState(0);
   const [viewers, setViewers] = useState([]);
   const [room, setRoom] = useState(() => (localStorage.getItem(ROOM_KEY) === 'dj' ? 'dj' : 'movie'));
@@ -62,6 +64,7 @@ export default function App() {
       setJoining(false);
       setJoinError(null);
       if (data.room) setRoom(data.room);
+      if (data.webState) setWebState(data.webState);
     });
     const unsubViewerCount = on('viewerCount', setViewerCount);
     const unsubUsersList = on('users:list', setViewers);
@@ -73,12 +76,14 @@ export default function App() {
     const unsubChat = on('chat:message', () => {
       if (!chatOpenRef.current) setChatUnread(n => n + 1);
     });
+    const unsubWeb = on('web:playbackUpdate', setWebState);
     return () => {
       unsubJoined?.();
       unsubViewerCount?.();
       unsubUsersList?.();
       unsubJoinError?.();
       unsubChat?.();
+      unsubWeb?.();
     };
   }, [on]);
 
@@ -169,7 +174,18 @@ export default function App() {
 
       <main className="mobile-main">
         <div className={`mobile-room-pane ${room === 'movie' ? 'active' : 'inactive'}`}>
-          <MovieRoom emit={emit} on={on} sessionData={sessionData} userName={userName} unlocked={audioUnlocked} isActive={room === 'movie'} />
+          {webState?.web ? (
+            <WebRoom
+              webState={webState}
+              emit={emit}
+              on={on}
+              userId={sessionData?.userId}
+              unlocked={audioUnlocked}
+              isActive={room === 'movie'}
+            />
+          ) : (
+            <MovieRoom emit={emit} on={on} sessionData={sessionData} userName={userName} unlocked={audioUnlocked} isActive={room === 'movie'} />
+          )}
         </div>
         <div className={`mobile-room-pane ${room === 'dj' ? 'active' : 'inactive'}`}>
           <DJRoom emit={emit} on={on} sessionData={sessionData} userName={userName} unlocked={audioUnlocked} isActive={room === 'dj'} />
