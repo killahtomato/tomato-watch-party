@@ -146,34 +146,12 @@ export default function SettingsPanel({ open, onClose }) {
             checked={settings.showSubtitles}
             onChange={(value) => patch({ showSubtitles: value })}
           />
-          <label className="setting-field">
-            <span>Intro skip (seconds)</span>
-            <input
-              type="number"
-              min="0"
-              max="600"
-              step="5"
-              value={settings.introSkipSeconds}
-              onChange={(e) => patch({ introSkipSeconds: e.target.value })}
-            />
-          </label>
           <Toggle
             setting="autoSkipIntro"
             label="Auto-skip intro"
             checked={settings.autoSkipIntro}
             onChange={(value) => patch({ autoSkipIntro: value })}
           />
-          <label className="setting-field">
-            <span>Credits window (seconds)</span>
-            <input
-              type="number"
-              min="0"
-              max="600"
-              step="5"
-              value={settings.creditsSkipSeconds}
-              onChange={(e) => patch({ creditsSkipSeconds: e.target.value })}
-            />
-          </label>
           <Toggle
             setting="autoSkipCredits"
             label="Auto-skip credits"

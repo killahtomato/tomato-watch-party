@@ -122,6 +122,8 @@ export default function WebSearchPanel({ emit, on, isHost, onPlay }) {
       id: selectedResult.id,
       ep: episode.key,
       mode: nextMode,
+      title: selectedResult.title,
+      showKey: `${selectedResult.source}:${selectedResult.id}`,
     });
     const streams = (response.streams || []).filter((s) => s.playable !== false);
     const result = { ...response, streams };
@@ -249,6 +251,9 @@ export default function WebSearchPanel({ emit, on, isHost, onPlay }) {
       origin: stream.origin,
       subtitles: resolved.subtitles || [],
       live: false,
+      showKey: `${selectedResult.source}:${selectedResult.id}`,
+      showTitle: selectedResult.title,
+      skip: resolved.skip || null,
     });
   }, [selectedResult, selectedEpisode, resolved, selectedQuality, mode, onPlay]);
 

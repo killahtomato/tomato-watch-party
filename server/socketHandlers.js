@@ -38,7 +38,12 @@ import {
   updateWebHostPosition,
   isWebActive,
   endWeb,
+  normalizeSkip,
+  setWebSkip,
+  getDetectedWebSkip,
 } from './webManager.js';
+import { getSkipProfile, setSkipProfile } from './skipStore.js';
+import { lookupSkipTimes } from './aniskip.js';
 import { buildStreamProxyUrl } from './webProxy.js';
 import {
   tomatoSearch,
@@ -461,7 +466,21 @@ export function setupSocketHandlers(io) {
             };
           })
           .filter(Boolean);
-        callback?.({ success: true, streams, subtitles });
+        const source = String(data?.source ?? '');
+        const showKey = typeof data?.showKey === 'string' && data.showKey
+          ? data.showKey
+          : `${source}:${String(data?.id ?? '')}`;
+        let skip = normalizeSkip(result.skip);
+        if (!skip) {
+          skip = await lookupSkipTimes({
+            title: String(data?.title ?? ''),
+            episode: String(data?.ep ?? ''),
+            episodeLength: 1440,
+          });
+        }
+        const profile = getSkipProfile(showKey);
+        if (!skip && profile) skip = profile;
+        callback?.({ success: true, streams, subtitles, skip, profile, showKey });
       } catch (err) {
         callback?.({ error: err.message });
       }
@@ -472,9 +491,12 @@ export function setupSocketHandlers(io) {
       try {
         endPlayback();
         const state = playWeb(data);
+        if (!getDetectedWebSkip() && state.web?.showKey) {
+          setWebSkip(getSkipProfile(state.web.showKey));
+        }
         logger.info(`Host playing web stream: ${state.web?.title ?? ''}`);
-        broadcastToRoom(io, 'movie', 'web:playbackUpdate', state, true);
-        callback?.({ success: true, state });
+        broadcastToRoom(io, 'movie', 'web:playbackUpdate', getWebState(), true);
+        callback?.({ success: true, state: getWebState() });
       } catch (err) {
         callback?.({ error: err.message });
       }
@@ -502,6 +524,36 @@ export function setupSocketHandlers(io) {
       const state = seekWeb(data.time);
       broadcastToRoom(io, 'movie', 'web:playbackUpdate', state, true);
       callback?.({ success: true, state });
+    });
+
+    socket.on('web:setSkip', (data, callback) => {
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
+      const state = getWebState();
+      if (!state.web) return callback?.({ error: 'Nothing playing' });
+      const skip = normalizeSkip(data?.skip);
+      if (!skip) return callback?.({ error: 'No valid skip segments' });
+      try {
+        setSkipProfile(state.web.showKey, skip);
+      } catch (err) {
+        return callback?.({ error: err.message });
+      }
+      setWebSkip(skip);
+      broadcastToRoom(io, 'movie', 'web:playbackUpdate', getWebState(), true);
+      callback?.({ success: true, skip });
+    });
+
+    socket.on('web:clearSkip', (_data, callback) => {
+      if (!isHostSocket(socket, 'movie')) return callback?.({ error: 'Unauthorized' });
+      const state = getWebState();
+      if (!state.web) return callback?.({ error: 'Nothing playing' });
+      try {
+        setSkipProfile(state.web.showKey, null);
+      } catch (err) {
+        return callback?.({ error: err.message });
+      }
+      setWebSkip(getDetectedWebSkip());
+      broadcastToRoom(io, 'movie', 'web:playbackUpdate', getWebState(), true);
+      callback?.({ success: true, skip: getWebState().web?.skip ?? null });
     });
 
     socket.on('web:ended', (_data, callback) => {

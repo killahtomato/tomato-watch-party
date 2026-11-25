@@ -14,8 +14,6 @@ const KEYS = {
   showSubtitles: 'twp.showSubtitles',
   djVisualizer: 'twp.djVisualizer',
   djCrossfade: 'twp.djCrossfade',
-  introSkipSeconds: 'twp.introSkipSeconds',
-  creditsSkipSeconds: 'twp.creditsSkipSeconds',
   autoSkipIntro: 'twp.autoSkipIntro',
   autoSkipCredits: 'twp.autoSkipCredits',
 };
@@ -36,8 +34,6 @@ const DEFAULTS = {
   showSubtitles: true,
   djVisualizer: 'radial',
   djCrossfade: true,
-  introSkipSeconds: 90,
-  creditsSkipSeconds: 120,
   autoSkipIntro: false,
   autoSkipCredits: false,
 };
@@ -73,11 +69,6 @@ function sanitize(key, value) {
   if (key === 'chatSize') return TEXT_SIZES.includes(value) ? value : DEFAULTS[key];
   if (key === 'subtitleSize') return TEXT_SIZES.includes(value) ? value : DEFAULTS[key];
   if (key === 'djVisualizer') return VISUALIZER_VARIANTS.includes(value) ? value : DEFAULTS[key];
-  if (key === 'introSkipSeconds' || key === 'creditsSkipSeconds') {
-    const num = Number(value);
-    if (!Number.isFinite(num)) return DEFAULTS[key];
-    return Math.min(600, Math.max(0, Math.round(num)));
-  }
   if (key === 'theme') return value || DEFAULTS[key];
   if (key === 'accent') return value || DEFAULTS[key];
   return value || DEFAULTS[key];

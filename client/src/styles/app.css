@@ -274,32 +274,6 @@ input:focus {
   flex-shrink: 0;
 }
 
-.skip-controls {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 30;
-  display: flex;
-  gap: 8px;
-}
-
-.skip-btn {
-  padding: 10px 16px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: rgba(0, 0, 0, 0.75);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  backdrop-filter: blur(8px);
-}
-
-.skip-btn:hover {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
 .video-stack {
   position: absolute;
   inset: 0;
@@ -1471,6 +1445,21 @@ video::media-controls { display: none !important; }
 
 .skip-btn:hover {
   background: var(--surface-light);
+}
+
+.skip-mark {
+  padding: 6px 10px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-dim);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.skip-mark:hover {
+  color: var(--text);
+  border-color: var(--accent);
 }
 
 .reactions-toggle {

@@ -58,6 +58,21 @@ export function getCurrentWeb() {
   return currentWeb;
 }
 
+export function normalizeSkip(skip) {
+  if (!skip || typeof skip !== 'object') return null;
+  const build = (segment) => {
+    if (!segment || typeof segment !== 'object') return null;
+    const start = Number(segment.start);
+    const end = Number(segment.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return null;
+    return { start, end };
+  };
+  const intro = build(skip.intro);
+  const credits = build(skip.credits || skip.outro);
+  if (!intro && !credits) return null;
+  return { intro, credits };
+}
+
 function normalizeDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== 'object') throw new Error('Invalid descriptor');
   const proxyUrl = String(descriptor.proxyUrl || '');
@@ -82,7 +97,20 @@ function normalizeDescriptor(descriptor) {
       })).filter((sub) => sub.url && sub.proxyUrl.startsWith('/api/web/stream'))
       : [],
     live: descriptor.live === true,
+    skip: normalizeSkip(descriptor.skip) || null,
+    detectedSkip: normalizeSkip(descriptor.skip) || null,
+    showKey: descriptor.showKey ? String(descriptor.showKey).slice(0, 200) : '',
   };
+}
+
+export function setWebSkip(skip) {
+  if (!currentWeb) return null;
+  currentWeb.skip = normalizeSkip(skip);
+  return currentWeb.skip;
+}
+
+export function getDetectedWebSkip() {
+  return currentWeb?.detectedSkip || null;
 }
 
 export function playWeb(descriptor) {
