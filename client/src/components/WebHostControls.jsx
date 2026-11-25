@@ -176,6 +176,12 @@ export default function WebHostControls({ emit, webState, seekRef, playRef, paus
           </button>
           {editSkips && (
             <>
+              <div className="skip-readout">
+                {intro ? `Intro ${formatTime(intro.start)}–${formatTime(intro.end)}` : 'Intro not set'}
+              </div>
+              <div className="skip-readout">
+                {credits ? `Credits ${formatTime(credits.start)}–${formatTime(credits.end)}` : 'Credits not set'}
+              </div>
               <button type="button" className="skip-mark" onClick={handleMarkIntro} title="Set the intro end at the current time">
                 Mark intro end
               </button>

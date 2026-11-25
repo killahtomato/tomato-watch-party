@@ -491,8 +491,9 @@ export function setupSocketHandlers(io) {
       try {
         endPlayback();
         const state = playWeb(data);
-        if (!getDetectedWebSkip() && state.web?.showKey) {
-          setWebSkip(getSkipProfile(state.web.showKey));
+        if (state.web?.showKey) {
+          const profile = getSkipProfile(state.web.showKey);
+          if (profile) setWebSkip(profile);
         }
         logger.info(`Host playing web stream: ${state.web?.title ?? ''}`);
         broadcastToRoom(io, 'movie', 'web:playbackUpdate', getWebState(), true);
