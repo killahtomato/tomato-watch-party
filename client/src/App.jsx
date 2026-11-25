@@ -29,6 +29,10 @@ export default function App() {
   const [viewers, setViewers] = useState([]);
   const { connected, emit, on } = useSocket();
   const pendingNameRef = useRef(null);
+  const lastJoinRef = useRef(null);
+  const hostTokenRef = useRef(null);
+  const djTokenRef = useRef(null);
+  const wasConnectedRef = useRef(false);
   const seekRef = useRef(null);
   const playRef = useRef(null);
   const pauseRef = useRef(null);
@@ -54,22 +58,26 @@ export default function App() {
   useEffect(() => {
     const token = sessionStorage.getItem('hostToken');
     if (token) {
+      hostTokenRef.current = token;
       emit('host:authenticate', { token }, (response) => {
         if (response?.success) {
           setIsHost(true);
         } else {
           sessionStorage.removeItem('hostToken');
+          hostTokenRef.current = null;
         }
       });
     }
 
     const djToken = sessionStorage.getItem('djToken');
     if (djToken) {
+      djTokenRef.current = djToken;
       emit('host:authenticate', { token: djToken, room: 'dj' }, (response) => {
         if (response?.success) {
           setIsDJ(true);
         } else {
           sessionStorage.removeItem('djToken');
+          djTokenRef.current = null;
         }
       });
     }
@@ -91,6 +99,8 @@ export default function App() {
     const unsubRevoked = on('host:revoked', () => {
       setIsHost(false);
       setIsDJ(false);
+      hostTokenRef.current = null;
+      djTokenRef.current = null;
       sessionStorage.removeItem('hostToken');
       sessionStorage.removeItem('djToken');
     });
@@ -124,11 +134,26 @@ export default function App() {
     };
   }, [on, emit]);
 
+  useEffect(() => {
+    if (!connected) {
+      wasConnectedRef.current = false;
+      return undefined;
+    }
+    if (wasConnectedRef.current) return undefined;
+    wasConnectedRef.current = true;
+    if (!lastJoinRef.current) return undefined;
+    emit('join', lastJoinRef.current);
+    if (hostTokenRef.current) emit('host:authenticate', { token: hostTokenRef.current }, () => {});
+    if (djTokenRef.current) emit('host:authenticate', { token: djTokenRef.current, room: 'dj' }, () => {});
+    return undefined;
+  }, [connected, emit]);
+
   const handleNameSubmit = useCallback(
     (name) => {
       if (joining) return;
       setJoining(true);
       pendingNameRef.current = name;
+      lastJoinRef.current = { name };
       emit('join', { name });
     },
     [emit, joining]
@@ -137,12 +162,14 @@ export default function App() {
   const handleRoomSwitch = useCallback((room) => {
     if (room === currentRoom) return;
     setCurrentRoom(room);
+    lastJoinRef.current = { name: pendingNameRef.current, room };
     emit('join', { name: pendingNameRef.current, room });
   }, [currentRoom, emit]);
 
   const handleHostLogin = useCallback(
     (token) => {
       sessionStorage.setItem('hostToken', token);
+      hostTokenRef.current = token;
       emit('host:authenticate', { token }, (response) => {
         if (response?.success) {
           setIsHost(true);
@@ -158,6 +185,7 @@ export default function App() {
   const handleDJLogin = useCallback(
     (token) => {
       sessionStorage.setItem('djToken', token);
+      djTokenRef.current = token;
       emit('host:authenticate', { token, room: 'dj' }, (response) => {
         if (response?.success) {
           setIsDJ(true);

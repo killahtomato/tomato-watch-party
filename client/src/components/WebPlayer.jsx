@@ -46,6 +46,9 @@ export default function WebPlayer({
   const resumeAfterSeekRef = useRef(false);
   const seekResumeTimeoutRef = useRef(null);
   const hostInitialSyncRef = useRef(true);
+  const skipIntroDoneRef = useRef(false);
+  const skipCreditsDoneRef = useRef(false);
+  const [skipWindows, setSkipWindows] = useState({ intro: false, credits: false });
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const settings = useSettings();
@@ -72,6 +75,59 @@ export default function WebPlayer({
   const mediaType = stream?.type || 'hls';
   const isHls = mediaType === 'hls';
   const myUserId = userId || null;
+
+  const seekTo = useCallback((time) => {
+    if (videoRef.current) videoRef.current.currentTime = time;
+    emit('web:seek', { time });
+  }, [emit]);
+
+  const handleSkipIntro = useCallback(() => {
+    const duration = videoRef.current?.duration || 0;
+    skipIntroDoneRef.current = true;
+    seekTo(Math.min(settings.introSkipSeconds, Math.max(0, duration - 1)));
+  }, [seekTo, settings.introSkipSeconds]);
+
+  const handleSkipCredits = useCallback(() => {
+    const duration = videoRef.current?.duration || 0;
+    skipCreditsDoneRef.current = true;
+    seekTo(Math.max(0, duration - 0.2));
+  }, [seekTo]);
+
+  useEffect(() => {
+    skipIntroDoneRef.current = false;
+    skipCreditsDoneRef.current = false;
+    setSkipWindows({ intro: false, credits: false });
+  }, [proxyUrl]);
+
+  useEffect(() => {
+    if (!isHost || !isActive) {
+      setSkipWindows(prev => (prev.intro || prev.credits ? { intro: false, credits: false } : prev));
+      return undefined;
+    }
+    const tick = () => {
+      const video = videoRef.current;
+      const duration = Number.isFinite(video?.duration) ? video.duration : 0;
+      const current = video?.currentTime || 0;
+      const hasDuration = duration > 0;
+      const playing = webState?.isPlaying;
+      const intro = hasDuration && playing && current < settings.introSkipSeconds;
+      const credits = hasDuration && playing && duration - current <= settings.creditsSkipSeconds && duration - current > 0.5;
+
+      if (settings.autoSkipIntro && intro && current > 0.3 && !skipIntroDoneRef.current) {
+        skipIntroDoneRef.current = true;
+        seekTo(Math.min(settings.introSkipSeconds, Math.max(0, duration - 1)));
+      }
+      if (settings.autoSkipCredits && credits && !skipCreditsDoneRef.current) {
+        skipCreditsDoneRef.current = true;
+        seekTo(Math.max(0, duration - 0.2));
+      }
+
+      setSkipWindows(prev => (prev.intro === intro && prev.credits === credits ? prev : { intro, credits }));
+    };
+    tick();
+    const interval = setInterval(tick, 500);
+    return () => clearInterval(interval);
+  }, [isHost, isActive, webState?.isPlaying, proxyUrl, settings.introSkipSeconds, settings.creditsSkipSeconds, settings.autoSkipIntro, settings.autoSkipCredits, seekTo]);
 
   const handleThrow = useCallback((item) => {
     emit('throw', { item });
@@ -461,6 +517,17 @@ export default function WebPlayer({
           else containerRef.current?.requestFullscreen();
         }}
       />
+      {isHost && (skipWindows.intro || skipWindows.credits) && (
+        <div className="skip-controls">
+          {skipWindows.intro && (
+            <button type="button" className="skip-btn" onClick={handleSkipIntro}>⏭ Skip Intro</button>
+          )}
+          {skipWindows.credits && (
+            <button type="button" className="skip-btn" onClick={handleSkipCredits}>⏭ Skip Credits</button>
+          )}
+        </div>
+      )}
+
       <div className="player-bar">
         <div className="player-controls-left" />
         <ThrowButton onThrow={handleThrow} onReaction={handleReaction} on={on} reactionsEnabled={reactionsEnabled} />

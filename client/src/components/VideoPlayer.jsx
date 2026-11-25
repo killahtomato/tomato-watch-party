@@ -55,6 +55,9 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
   const lastSeekTime = useRef(0);
   const subIntervalRef = useRef(null);
   const pendingAutoplayRef = useRef(null);
+  const skipIntroDoneRef = useRef(false);
+  const skipCreditsDoneRef = useRef(false);
+  const [skipWindows, setSkipWindows] = useState({ intro: false, credits: false });
   const [playbackState, setPlaybackState] = useState(
     sessionData?.playbackState || { movie: null, isPlaying: false, currentTime: 0, transcoding: false, transcodeProgress: 0 }
   );
@@ -102,6 +105,59 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
   }, [playbackState?.movie, playbackState.transcoding, currentQuality, trackInfo, selectedAudio]);
 
   const myUserId = sessionData?.userId;
+
+  const seekTo = useCallback((time) => {
+    if (videoRef.current) videoRef.current.currentTime = time;
+    emit('host:seek', { time });
+  }, [emit]);
+
+  const handleSkipIntro = useCallback(() => {
+    const dur = videoRef.current?.duration || 0;
+    skipIntroDoneRef.current = true;
+    seekTo(Math.min(settings.introSkipSeconds, Math.max(0, dur - 1)));
+  }, [seekTo, settings.introSkipSeconds]);
+
+  const handleSkipCredits = useCallback(() => {
+    const dur = videoRef.current?.duration || 0;
+    skipCreditsDoneRef.current = true;
+    seekTo(Math.max(0, dur - 0.2));
+  }, [seekTo]);
+
+  useEffect(() => {
+    skipIntroDoneRef.current = false;
+    skipCreditsDoneRef.current = false;
+    setSkipWindows({ intro: false, credits: false });
+  }, [playbackState.movie]);
+
+  useEffect(() => {
+    if (!isHost || !isActive) {
+      setSkipWindows(prev => (prev.intro || prev.credits ? { intro: false, credits: false } : prev));
+      return undefined;
+    }
+    const tick = () => {
+      const video = videoRef.current;
+      const duration = Number.isFinite(video?.duration) ? video.duration : 0;
+      const current = video?.currentTime || 0;
+      const hasDuration = duration > 0;
+      const playing = playbackState.isPlaying;
+      const intro = hasDuration && playing && current < settings.introSkipSeconds;
+      const credits = hasDuration && playing && duration - current <= settings.creditsSkipSeconds && duration - current > 0.5;
+
+      if (settings.autoSkipIntro && intro && current > 0.3 && !skipIntroDoneRef.current) {
+        skipIntroDoneRef.current = true;
+        seekTo(Math.min(settings.introSkipSeconds, Math.max(0, duration - 1)));
+      }
+      if (settings.autoSkipCredits && credits && !skipCreditsDoneRef.current) {
+        skipCreditsDoneRef.current = true;
+        seekTo(Math.max(0, duration - 0.2));
+      }
+
+      setSkipWindows(prev => (prev.intro === intro && prev.credits === credits ? prev : { intro, credits }));
+    };
+    tick();
+    const interval = setInterval(tick, 500);
+    return () => clearInterval(interval);
+  }, [isHost, isActive, playbackState.isPlaying, playbackState.movie, settings.introSkipSeconds, settings.creditsSkipSeconds, settings.autoSkipIntro, settings.autoSkipCredits, seekTo]);
 
   const addToast = useCallback((message, type = 'info') => {
     const id = Date.now() + Math.random();
@@ -649,6 +705,18 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
         }}
       />
       <audio ref={audioRef} preload="auto" playsInline style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px' }} />
+
+      {isHost && (skipWindows.intro || skipWindows.credits) && (
+        <div className="skip-controls">
+          {skipWindows.intro && (
+            <button type="button" className="skip-btn" onClick={handleSkipIntro}>⏭ Skip Intro</button>
+          )}
+          {skipWindows.credits && (
+            <button type="button" className="skip-btn" onClick={handleSkipCredits}>⏭ Skip Credits</button>
+          )}
+        </div>
+      )}
+
       <div className="player-bar">
         <div className="player-controls-left">
           <select className="audio-selector" value={selectedAudio} onChange={handleAudioChange} title="Audio Track">

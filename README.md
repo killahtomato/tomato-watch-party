@@ -55,6 +55,7 @@ If you cloned with `git clone --recursive`, step 2 is already done.
 - **Viewer list** — Slide-out panel with signal strength, ping, and quality controls
 - **Host badge** — the host is marked with a 👑 in chat and the viewer list
 - **Fullscreen** — Double-click video
+- **Skip intros/credits** — host skip buttons with configurable lengths, plus optional auto-skip for local movies and VOD web streams
 - **Persistent cache** — Transcoded files cached across restarts
 
 ## Settings
@@ -64,7 +65,7 @@ Open the ⚙️ Settings tab on desktop or the gear in the mobile header. Prefer
 - **Theme** — 15 themes (Tomato Dark, Light, AMOLED, Midnight, Forest, Ocean, Sunset, Sakura, Grape, Amber, Espresso, Mono, Cyberpunk, Crimson, Sepia) and 14 accent colors.
 - **Follow system theme** — match the OS color scheme.
 - **Reduce motion** — snap drawer and overlay animations instead of sliding them, and hide throw/reaction buttons and their effects for that user.
-- **Playback** — default quality, auto-play next, show subtitles, and default volume.
+- **Playback** — default quality, auto-play next, show subtitles, intro/credits skip lengths and auto-skip toggles, and default volume.
 - **Web** — preferred anime source and default audio (sub/dub).
 - **Chat** — chat text size and subtitle size (Small/Medium/Large).
 - **DJ** — visualizer style (radial, bars, wave) and crossfade transitions.

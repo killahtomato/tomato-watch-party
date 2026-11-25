@@ -180,13 +180,20 @@
 }
 
 .setting-field select,
-.setting-field input[type="range"] {
+.setting-field input[type="range"],
+.setting-field input[type="number"] {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 8px;
   font-size: 14px;
+}
+
+.setting-field input[type="number"] {
+  width: 90px;
+  box-sizing: border-box;
+  text-align: right;
 }
 
 .setting-field input[type="range"] {
@@ -216,13 +223,17 @@
 }
 
 [data-chat-size="sm"] .chat-msg,
-[data-chat-size="sm"] .chat-msg.system { font-size: 13px; }
+[data-chat-size="sm"] .chat-msg.system { font-size: 15px; }
+[data-chat-size="md"] .chat-msg,
+[data-chat-size="md"] .chat-msg.system { font-size: 18px; }
 [data-chat-size="lg"] .chat-msg,
-[data-chat-size="lg"] .chat-msg.system { font-size: 17px; }
-[data-chat-size="sm"] .chat-name,
-[data-chat-size="sm"] .chat-text { font-size: 13px; }
-[data-chat-size="lg"] .chat-name,
-[data-chat-size="lg"] .chat-text { font-size: 17px; }
+[data-chat-size="lg"] .chat-msg.system { font-size: 21px; }
+[data-chat-size="sm"] .chat-name { font-size: 14px; }
+[data-chat-size="sm"] .chat-text { font-size: 15px; }
+[data-chat-size="md"] .chat-name { font-size: 15px; }
+[data-chat-size="md"] .chat-text { font-size: 18px; }
+[data-chat-size="lg"] .chat-name { font-size: 17px; }
+[data-chat-size="lg"] .chat-text { font-size: 21px; }
 [data-chat-size="sm"] .chat-input input,
 [data-chat-size="sm"] .chat-input button { font-size: 12px; }
 [data-chat-size="lg"] .chat-input input,

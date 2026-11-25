@@ -32,6 +32,8 @@ export default function App() {
   const [installDismissed, setInstallDismissed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const pendingNameRef = useRef(null);
+  const lastJoinRef = useRef(null);
+  const wasConnectedRef = useRef(false);
   const chatOpenRef = useRef(false);
 
   useEffect(() => { chatOpenRef.current = chatOpen; }, [chatOpen]);
@@ -39,6 +41,18 @@ export default function App() {
   useEffect(() => {
     initSettings();
   }, []);
+
+  useEffect(() => {
+    if (!connected) {
+      wasConnectedRef.current = false;
+      return undefined;
+    }
+    if (wasConnectedRef.current) return undefined;
+    wasConnectedRef.current = true;
+    if (!lastJoinRef.current) return undefined;
+    emit('join', lastJoinRef.current);
+    return undefined;
+  }, [connected, emit]);
 
   useEffect(() => {
     const handler = (e) => {
@@ -95,12 +109,14 @@ export default function App() {
     if (joining) return;
     setJoining(true);
     pendingNameRef.current = name;
+    lastJoinRef.current = { name };
     emit('join', { name });
   }, [emit, joining]);
 
   const handleSwitchRoom = useCallback((nextRoom) => {
     if (nextRoom === room) return;
     setRoom(nextRoom);
+    lastJoinRef.current = { name: pendingNameRef.current, room: nextRoom };
     emit('join', { name: pendingNameRef.current, room: nextRoom });
   }, [emit, room]);
 

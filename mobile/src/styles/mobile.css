@@ -455,7 +455,7 @@ select {
 }
 
 .chat-msg {
-  font-size: 15px;
+  font-size: 18px;
   padding: 8px 12px;
   margin-bottom: 6px;
   background: var(--surface);
@@ -483,12 +483,12 @@ select {
 
 .chat-name {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .chat-timestamp {
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .chat-host-crown {
@@ -496,7 +496,7 @@ select {
 }
 
 .chat-text {
-  font-size: 15px;
+  font-size: 18px;
   line-height: 1.4;
 }
 

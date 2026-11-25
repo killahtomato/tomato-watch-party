@@ -274,6 +274,32 @@ input:focus {
   flex-shrink: 0;
 }
 
+.skip-controls {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 30;
+  display: flex;
+  gap: 8px;
+}
+
+.skip-btn {
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+.skip-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
 .video-stack {
   position: absolute;
   inset: 0;
@@ -793,12 +819,16 @@ video::media-controls { display: none !important; }
 }
 
 .chat-msg {
-  font-size: 15px;
+  font-size: 18px;
   line-height: 1.5;
   padding: 8px 12px;
   border-radius: 12px;
   background: var(--surface-light);
   animation: msg-in 0.2s ease-out;
+}
+
+.chat-timestamp {
+  font-size: 12px;
 }
 
 @keyframes msg-in {
@@ -1369,7 +1399,7 @@ video::media-controls { display: none !important; }
 
 .chat-timestamp {
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 12px;
   margin-right: 4px;
   font-variant-numeric: tabular-nums;
 }
@@ -1685,7 +1715,7 @@ video::media-controls { display: none !important; }
 }
 
 .chat-timestamp {
-  font-size: 8px;
+  font-size: 12px;
   margin-left: auto;
 }
 
@@ -2295,7 +2325,7 @@ video::media-controls { display: none !important; }
   }
 
   .chat-messages { padding: 8px; }
-  .chat-msg { font-size: 14px; padding: 6px 10px; }
+  .chat-msg { padding: 6px 10px; }
 
   .viewer-panel-tab { display: none; }
 
