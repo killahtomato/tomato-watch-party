@@ -40,6 +40,7 @@ If you cloned with `git clone --recursive`, step 2 is already done.
 | `./twp-party` | Start server + Cloudflare Tunnel for remote friends |
 | `./twp-party --background` | Same as above, but daemonizes and exits |
 | `./twp-transcode` | Batch transcode all movies (pacman progress bar) |
+| `./twp-backup [path]` | Write a dated backup archive (secrets excluded, persistent state included) |
 
 ## Features
 
@@ -157,6 +158,19 @@ Use Cloudflare Tunnel to share your party with friends:
 The script installs dependencies if missing, starts the server, launches cloudflared, and prints a shareable `trycloudflare.com` URL.
 
 The tunnel URL is public. Use a strong `HOST_PASSWORD`, keep `JWT_SECRET` secret, and avoid posting the URL publicly. For anything beyond a private party, put the tunnel behind Cloudflare Access or another access-control layer.
+
+## Backups & Data
+
+Persistent app state lives in `DATA_DIR` (default `./data`): playback order, skip profiles, resume positions, and recent chat history. Media (`movies/`, `music/`, `streams/`) is ephemeral/cache data and not part of that state.
+
+```bash
+./twp-backup                    # ~/Work/backups/watch-party-<timestamp>.tar.gz
+./twp-backup /path/to/out.tar.gz
+```
+
+- `.env` (and `.env.*`) is **excluded** — recreate secrets when restoring.
+- Dependencies, media, logs, and existing archives are excluded.
+- On startup the server migrates any legacy `streams/order.json` or `streams/skip_profiles.json` into `DATA_DIR`.
 
 ## Mobile Site
 

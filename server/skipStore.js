@@ -1,9 +1,9 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { STREAM_DIR } from './streamManager.js';
+import { getDataDir } from './streamManager.js';
 import { logger } from './logger.js';
 
-const SKIP_FILE = join(STREAM_DIR, 'skip_profiles.json');
+const SKIP_FILE = join(getDataDir(), 'skip_profiles.json');
 const MAX_ENTRIES = 500;
 const MAX_TIME = 100000;
 
@@ -17,7 +17,7 @@ function readStore() {
 }
 
 function writeStore(store) {
-  mkdirSync(STREAM_DIR, { recursive: true });
+  mkdirSync(getDataDir(), { recursive: true });
   writeFileSync(SKIP_FILE, JSON.stringify(store, null, 2));
 }
 

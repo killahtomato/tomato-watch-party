@@ -252,6 +252,16 @@ export function endPlayback() {
   return getPlaybackState();
 }
 
+export async function restorePlayback({ track, isPlaying: playing = false, currentTime = 0 } = {}) {
+  if (typeof track !== 'string' || !isSafeRelativePath(track)) throw new Error('Invalid track name');
+  await playTrack(track);
+  const offset = Number(currentTime);
+  seekPlayback(Number.isFinite(offset) && offset > 0 ? offset : 0);
+  if (playing) resumePlayback();
+  else pausePlayback();
+  return getPlaybackState();
+}
+
 function normalizeText(value) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }

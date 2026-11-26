@@ -1,9 +1,9 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { STREAM_DIR, isSafeName } from './streamManager.js';
+import { getDataDir, isSafeName } from './streamManager.js';
 import { logger } from './logger.js';
 
-const ORDER_FILE = join(STREAM_DIR, 'order.json');
+const ORDER_FILE = join(getDataDir(), 'order.json');
 const MAX_ITEMS = 1000;
 
 function readStore() {
@@ -34,7 +34,7 @@ export function setOrder(room, names) {
   store[room] = clean;
 
   try {
-    mkdirSync(STREAM_DIR, { recursive: true });
+    mkdirSync(getDataDir(), { recursive: true });
     writeFileSync(ORDER_FILE, JSON.stringify(store, null, 2));
   } catch (err) {
     logger.error(`Failed to save playback order: ${err.message}`);

@@ -1,0 +1,33 @@
+#!/bin/bash
+# Create a dated backup archive of Tomato Watch Party.
+#
+# Excludes secrets (.env*), dependencies, media (movies/music/transcoded
+# streams), logs, and existing archives. Persistent app state under DATA_DIR
+# (default ./data) IS included.
+set -euo pipefail
+
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(dirname "$PROJECT_DIR")"
+PROJECT="$(basename "$PROJECT_DIR")"
+DEFAULT_DIR="${TWP_BACKUP_DIR:-$HOME/Work/backups}"
+STAMP="$(date +%Y%m%d-%H%M%S)"
+OUT="${1:-$DEFAULT_DIR/$PROJECT-$STAMP.tar.gz}"
+
+mkdir -p "$(dirname "$OUT")"
+
+tar -czf "$OUT" -C "$ROOT" \
+  --exclude='node_modules' \
+  --exclude="$PROJECT/movies" \
+  --exclude="$PROJECT/music" \
+  --exclude="$PROJECT/streams" \
+  --exclude="$PROJECT/hls/*" \
+  --exclude='*.log' \
+  --exclude='*.tar.gz' \
+  --exclude='*.torrent' \
+  --exclude='.env' \
+  --exclude='.env.*' \
+  "$PROJECT"
+
+SIZE="$(du -h "$OUT" | cut -f1)"
+echo "Backup written to $OUT ($SIZE)"
+echo "Note: .env is excluded for safety; recreate it when restoring."

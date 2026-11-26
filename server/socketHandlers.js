@@ -44,7 +44,8 @@ import {
 } from './webManager.js';
 import { getSkipProfile, setSkipProfile } from './skipStore.js';
 import { lookupSkipTimes } from './aniskip.js';
-import { buildStreamProxyUrl } from './webProxy.js';
+import { buildStreamProxyUrl, streamHost } from './webProxy.js';
+import { requestPersist } from './persistence.js';
 import {
   tomatoSearch,
   tomatoEpisodes,
@@ -54,34 +55,15 @@ import {
   tomatoProbe,
 } from './tomatoBridge.js';
 
-const MAX_CHAT_HISTORY = 200;
-
-const rooms = {
-  movie: { users: new Map(), chatHistory: [], hostSocketId: null, reactionsEnabled: true },
-  dj: { users: new Map(), chatHistory: [], hostSocketId: null, reactionsEnabled: true },
-};
+import { getRoomState, MAX_CHAT_HISTORY } from './rooms.js';
 
 const throwCooldowns = new Map();
 const viewerHealth = new Map();
 
 let lastSeekBroadcast = 0;
 
-function streamHost(url) {
-  try {
-    const parsed = new URL(String(url));
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
-    return parsed.hostname;
-  } catch {
-    return null;
-  }
-}
-
 function getRoom(socket) {
   return socket.data?.room || 'movie';
-}
-
-function getRoomState(room) {
-  return rooms[room] || rooms.movie;
 }
 
 function isHostSocket(socket, room = getRoom(socket)) {
@@ -103,6 +85,7 @@ function broadcastToRoom(io, room, event, data, includeHost = false) {
   if (includeHost && state.hostSocketId && !state.users.has(state.hostSocketId)) {
     io.to(state.hostSocketId).emit(event, data);
   }
+  requestPersist();
 }
 
 function broadcastUsersList(io, room) {

@@ -25,6 +25,8 @@ import { handleWebStream } from './webProxy.js';
 import { logTomatoStatus } from './tomatoBridge.js';
 import { existsSync, mkdirSync, readFileSync } from 'fs';
 import { logger } from './logger.js';
+import { migrateLegacyStateFiles } from './migrateDataDir.js';
+import { initPersistence } from './persistence.js';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 
@@ -433,6 +435,10 @@ app.get('/api/subs/:movie/:quality/:index', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
+
+await migrateLegacyStateFiles();
+await initPersistence();
+
 httpServer.listen(PORT, () => {
   logger.info(`Server running on port ${PORT}`);
 });

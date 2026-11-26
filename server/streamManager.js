@@ -15,8 +15,9 @@ const execFileAsync = promisify(execFile);
 const MOVIE_DIR = process.env.MOVIE_DIR || './movies';
 const MUSIC_DIR = process.env.MUSIC_DIR || './music';
 const STREAM_DIR = process.env.STREAM_DIR || './streams';
+const DATA_DIR = process.env.DATA_DIR || './data';
 
-export { STREAM_DIR };
+export { STREAM_DIR, DATA_DIR };
 
 const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv', '.wmv', '.m4v'];
 const DEFAULT_QUALITY = '1080p';
@@ -25,6 +26,7 @@ let encoderConfig = { encoder: 'libx264', preset: 'ultrafast', hardware: false, 
 let encoderDetected = false;
 
 let currentMovie = null;
+let currentQuality = DEFAULT_QUALITY;
 let isPlaying = false;
 let playbackStartTime = null;
 let playbackOffset = 0;
@@ -372,6 +374,10 @@ export function getStreamDirBase() {
   return STREAM_DIR;
 }
 
+export function getDataDir() {
+  return DATA_DIR;
+}
+
 export async function getMovieList() {
   try {
     const files = await readdir(MOVIE_DIR);
@@ -428,6 +434,7 @@ export function getPlaybackState() {
 
   return {
     movie: currentMovie,
+    quality: currentQuality,
     isPlaying,
     currentTime: Math.max(0, currentTime),
     transcoding,
@@ -458,6 +465,7 @@ export async function playMovie(movieName, quality) {
 
   const sourceStat = await stat(moviePath);
   const effectiveQuality = quality || DEFAULT_QUALITY;
+  currentQuality = effectiveQuality;
   const streamPath = getStreamPath(movieName, effectiveQuality);
 
   if (existsSync(streamPath) && isCacheValid(streamPath, sourceStat)) {
@@ -576,6 +584,17 @@ export async function seekPlayback(time) {
 export function endPlayback() {
   currentMovie = null;
   resetPlaybackState();
+  return getPlaybackState();
+}
+
+export async function restorePlayback({ movie, quality, isPlaying: playing = false, currentTime = 0 } = {}) {
+  if (typeof movie !== 'string' || !isSafeName(movie)) throw new Error('Invalid movie name');
+  const requestedQuality = isValidQuality(quality) ? quality : DEFAULT_QUALITY;
+  await playMovie(movie, requestedQuality);
+  const offset = Number(currentTime);
+  seekPlayback(Number.isFinite(offset) && offset > 0 ? offset : 0);
+  if (playing) resumePlayback();
+  else pausePlayback();
   return getPlaybackState();
 }
 

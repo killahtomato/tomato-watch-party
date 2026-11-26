@@ -122,6 +122,16 @@ export async function fetchUpstream(url, decoded, range) {
   throw new Error('too many redirects');
 }
 
+export function streamHost(url) {
+  try {
+    const parsed = new URL(String(url));
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return parsed.hostname;
+  } catch {
+    return null;
+  }
+}
+
 export function buildStreamProxyUrl(url, { hosts, referrer = '', origin = '' }) {
   const token = issueStreamToken({ hosts, referrer, origin });
   return `/api/web/stream?token=${encodeURIComponent(token)}&url=${encodeURIComponent(url)}`;

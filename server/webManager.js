@@ -158,3 +158,13 @@ export function endWeb() {
   resetPlaybackState();
   return getWebState();
 }
+
+export function restoreWeb(descriptor, { isPlaying: playing = false, currentTime = 0 } = {}) {
+  const normalized = normalizeDescriptor(descriptor);
+  currentWeb = normalized;
+  const offset = Number(currentTime);
+  seekWeb(Number.isFinite(offset) && offset > 0 ? offset : 0);
+  if (playing) resumeWeb();
+  else pauseWeb();
+  return getWebState();
+}
