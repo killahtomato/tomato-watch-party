@@ -205,7 +205,7 @@ npm run test:e2e      # Playwright end-to-end suite (needs Chromium + ffmpeg)
 ```
 
 - Server tests cover auth, the proxy, the managers, skip profiles, and the resume-state store.
-- E2E boots the app with throwaway `MOVIE_DIR`/`MUSIC_DIR`/`STREAM_DIR`/`DATA_DIR`, a generated clip fixture, and covers join/chat, movie playback and controls, settings, DJ playback, reconnect recovery, restart-resume/pause, and web skip controls.
+- E2E boots the app with throwaway `MOVIE_DIR`/`MUSIC_DIR`/`STREAM_DIR`/`DATA_DIR`, a generated clip fixture, and covers join/chat (desktop + mobile), movie playback and controls, chat & throws, settings, DJ playback, reconnect recovery, restart-resume/pause, and web skip controls.
 - CI (`.github/workflows/ci.yml`) runs the server tests plus desktop, mobile, and e2e builds.
 
 ## Tech Stack

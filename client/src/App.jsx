@@ -12,6 +12,7 @@ import RoomSwitcher from './components/RoomSwitcher.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import { initSettings } from './utils/settings.js';
 import { useSettings } from './hooks/useSettings.js';
+import { useChatHistory } from './hooks/useChatHistory.js';
 import { applyOrder } from './utils/order.js';
 
 export default function App() {
@@ -48,6 +49,10 @@ export default function App() {
   const [resumeOnStart, setResumeOnStart] = useState(true);
   const [restoredAt, setRestoredAt] = useState(null);
   const settings = useSettings();
+  const { messages: chatMessages, sendMessage: sendChatMessage } = useChatHistory({
+    on,
+    initialHistory: sessionData?.chatHistory,
+  });
 
   useEffect(() => {
     initSettings();
@@ -412,7 +417,11 @@ export default function App() {
             <strong>🎵 DJ Room</strong>
           </div>
         )}
-        <Chat userName={userName} emit={emit} on={on} sessionData={sessionData} />
+        <Chat
+          userName={userName}
+          messages={chatMessages}
+          onSend={(text) => sendChatMessage(text, emit)}
+        />
 
         {currentRoom === 'movie' && !isHost && (
           <button

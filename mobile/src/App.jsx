@@ -10,6 +10,7 @@ import WebRoom from './components/WebRoom.jsx';
 import DJRoom from './components/DJRoom.jsx';
 import SettingsPanel from '@client/components/SettingsPanel.jsx';
 import { initSettings } from '@client/utils/settings.js';
+import { useChatHistory } from '@client/hooks/useChatHistory.js';
 
 const ROOM_KEY = 'twp:mobile-room';
 
@@ -35,6 +36,11 @@ export default function App() {
   const lastJoinRef = useRef(null);
   const wasConnectedRef = useRef(false);
   const chatOpenRef = useRef(false);
+
+  const { messages: chatMessages, sendMessage: sendChatMessage } = useChatHistory({
+    on,
+    initialHistory: sessionData?.chatHistory,
+  });
 
   useEffect(() => { chatOpenRef.current = chatOpen; }, [chatOpen]);
 
@@ -213,9 +219,8 @@ export default function App() {
       <ChatPanel
         open={chatOpen}
         userName={userName}
-        emit={emit}
-        on={on}
-        sessionData={sessionData}
+        messages={chatMessages}
+        onSend={(text) => sendChatMessage(text, emit)}
         onClose={() => setChatOpen(false)}
       />
 
