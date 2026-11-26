@@ -13,9 +13,12 @@
     "build:all": "npm run build && npm run build:mobile",
     "start": "cd server && npm start",
     "test": "cd server && npm test",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium",
     "install:all": "npm install && cd server && npm install && cd ../client && npm install && cd ../mobile && npm install"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "concurrently": "^9.1.0"
   }
 }

@@ -45,6 +45,8 @@ export default function App() {
   const [webProgress, setWebProgress] = useState({ current: 0, duration: 0, live: false });
   const [webPanelOpen, setWebPanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [resumeOnStart, setResumeOnStart] = useState(true);
+  const [restoredAt, setRestoredAt] = useState(null);
   const settings = useSettings();
 
   useEffect(() => {
@@ -90,6 +92,11 @@ export default function App() {
       setJoinError(null);
       if (data.room) setCurrentRoom(data.room);
       if (data.webState) setWebState(data.webState);
+      if (data.resumePolicy) setResumeOnStart(data.resumePolicy.resumeOnStart);
+      if (data.restoredAt) setRestoredAt(data.restoredAt);
+    });
+    const unsubResumePolicy = on('resumePolicy', (policy) => {
+      if (policy?.resumeOnStart !== undefined) setResumeOnStart(Boolean(policy.resumeOnStart));
     });
 
     const unsubViewerCount = on('viewerCount', (count) => {
@@ -131,6 +138,7 @@ export default function App() {
       unsubUsersList?.();
       unsubPlayback?.();
       unsubWeb?.();
+      unsubResumePolicy?.();
     };
   }, [on, emit]);
 
@@ -233,6 +241,13 @@ export default function App() {
     setWebPanelOpen(false);
   }, [emit]);
 
+  const handleResumePolicyChange = useCallback((value) => {
+    setResumeOnStart(value);
+    emit('host:setResumePolicy', { value }, (res) => {
+      if (res?.error) console.error(res.error);
+    });
+  }, [emit]);
+
   useEffect(() => {
     loadMovies();
     const unsubUpdated = on('movies:updated', loadMovies);
@@ -322,6 +337,9 @@ export default function App() {
               onReorderMovies={handleReorderMovies}
               webPanelOpen={webPanelOpen}
               setWebPanelOpen={setWebPanelOpen}
+              resumeOnStart={resumeOnStart}
+              onResumePolicyChange={handleResumePolicyChange}
+              restoredAt={restoredAt}
             />
           ) : (
             <HostControls
@@ -336,6 +354,9 @@ export default function App() {
               onReorderMovies={handleReorderMovies}
               webPanelOpen={webPanelOpen}
               setWebPanelOpen={setWebPanelOpen}
+              resumeOnStart={resumeOnStart}
+              onResumePolicyChange={handleResumePolicyChange}
+              restoredAt={restoredAt}
             />
           ))}
         </div>
@@ -353,6 +374,9 @@ export default function App() {
             onSeekPercent={setDJPlaybackPercent}
             onPercentUpdate={setDJPlaybackPercent}
             playbackPercent={djPlaybackPercent}
+            resumeOnStart={resumeOnStart}
+            onResumePolicyChange={handleResumePolicyChange}
+            restoredAt={restoredAt}
           />
         </div>
         </div>

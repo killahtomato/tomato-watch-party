@@ -1,4 +1,4 @@
-import { createWriteStream } from 'fs';
+import { createWriteStream, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -8,6 +8,7 @@ dotenv.config({ path: join(__dirname, '..', '.env') });
 
 const LOG_FILE = process.env.LOG_FILE || join(__dirname, '..', 'server.log');
 
+mkdirSync(dirname(LOG_FILE), { recursive: true });
 const stream = createWriteStream(LOG_FILE, { flags: 'a' });
 
 function timestamp() {

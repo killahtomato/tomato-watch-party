@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import MovieLibraryPanel from './MovieLibraryPanel.jsx';
+import ResumeToggle from './ResumeToggle.jsx';
 import { useSettings } from '../hooks/useSettings.js';
 
 function formatTime(seconds) {
@@ -11,7 +12,7 @@ function formatTime(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function WebHostControls({ emit, webState, seekRef, playRef, pauseRef, progress, movies = [], onReorderMovies, webPanelOpen, setWebPanelOpen }) {
+export default function WebHostControls({ emit, webState, seekRef, playRef, pauseRef, progress, movies = [], onReorderMovies, webPanelOpen, setWebPanelOpen, resumeOnStart = true, onResumePolicyChange, restoredAt }) {
   const [moviePanelOpen, setMoviePanelOpen] = useState(false);
   const [reactionsEnabled, setReactionsEnabled] = useState(true);
   const [dragPercent, setDragPercent] = useState(null);
@@ -134,6 +135,14 @@ export default function WebHostControls({ emit, webState, seekRef, playRef, paus
           </span>
         </div>
       )}
+
+      <ResumeToggle
+        resumeOnStart={resumeOnStart}
+        onToggle={onResumePolicyChange}
+        restoredAt={restoredAt}
+        currentTime={current}
+        duration={duration}
+      />
 
       {stream && !isLive && (
         <div className="seek-bar">

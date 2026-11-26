@@ -197,6 +197,17 @@ HOST_PASSWORD=change-me JWT_SECRET=$(openssl rand -hex 32) docker-compose up -d
 
 Both `HOST_PASSWORD` and `JWT_SECRET` must be set; the container refuses to start without them.
 
+## Tests
+
+```bash
+npm test              # server unit tests (node:test)
+npm run test:e2e      # Playwright end-to-end suite (needs Chromium + ffmpeg)
+```
+
+- Server tests cover auth, the proxy, the managers, skip profiles, and the resume-state store.
+- E2E boots the app with throwaway `MOVIE_DIR`/`MUSIC_DIR`/`STREAM_DIR`/`DATA_DIR`, a generated clip fixture, and covers join/chat, movie playback and controls, settings, DJ playback, reconnect recovery, restart-resume/pause, and web skip controls.
+- CI (`.github/workflows/ci.yml`) runs the server tests plus desktop, mobile, and e2e builds.
+
 ## Tech Stack
 
 - **Backend** — Node.js + Express + Socket.io

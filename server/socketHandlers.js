@@ -45,7 +45,8 @@ import {
 import { getSkipProfile, setSkipProfile } from './skipStore.js';
 import { lookupSkipTimes } from './aniskip.js';
 import { buildStreamProxyUrl, streamHost } from './webProxy.js';
-import { requestPersist } from './persistence.js';
+import { requestPersist, getRestoredAt } from './persistence.js';
+import { getResumePolicy, setResumePolicy } from './resumePolicyStore.js';
 import {
   tomatoSearch,
   tomatoEpisodes,
@@ -180,6 +181,8 @@ export function setupSocketHandlers(io) {
         room,
         playbackState,
         webState: room === 'movie' ? getWebState() : undefined,
+        resumePolicy: getResumePolicy(),
+        restoredAt: getRestoredAt(),
         chatHistory: state.chatHistory,
         viewerCount: state.users.size,
       });
@@ -783,6 +786,16 @@ export function setupSocketHandlers(io) {
       state.reactionsEnabled = data?.enabled !== false;
       broadcastToRoom(io, room, 'reactions:enabled', state.reactionsEnabled);
       callback?.({ success: true, enabled: state.reactionsEnabled });
+    });
+
+    socket.on('host:setResumePolicy', (data, callback) => {
+      const hostRooms = socket.data?.hostRooms;
+      if (socket.data?.isHost !== true || !hostRooms || hostRooms.size === 0) {
+        return callback?.({ error: 'Unauthorized' });
+      }
+      const policy = setResumePolicy(data?.value);
+      io.emit('resumePolicy', policy);
+      callback?.({ success: true, policy });
     });
 
     socket.on('host:refreshMovies', async (data, callback) => {

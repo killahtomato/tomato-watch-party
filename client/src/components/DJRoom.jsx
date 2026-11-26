@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import AudioVisualizer from './AudioVisualizer.jsx';
+import ResumeToggle from './ResumeToggle.jsx';
 import { applyOrder } from '../utils/order.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { updateSettings } from '../utils/settings.js';
 import { TRACK_SORTS, filterTracks, sortTracks, groupTracksByAlbum, computeNextTrack } from '../utils/trackList.js';
 
-export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActive = true, seekRef, playRef, pauseRef, onSeekPercent, onPercentUpdate, playbackPercent = 0 }) {
+export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActive = true, seekRef, playRef, pauseRef, onSeekPercent, onPercentUpdate, playbackPercent = 0, resumeOnStart = true, onResumePolicyChange, restoredAt }) {
   const audioRef = useRef(null);
   const preloadRef = useRef(null);
   const playbackRef = useRef({ isPlaying: false, currentTime: 0 });
@@ -450,6 +451,18 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
                 {formatTime(playbackState.currentTime)} / {formatTime(duration)}
               </span>
             </div>
+          </div>
+        )}
+
+        {isDJ && (
+          <div className="dj-resume">
+            <ResumeToggle
+              resumeOnStart={resumeOnStart}
+              onToggle={onResumePolicyChange}
+              restoredAt={restoredAt}
+              currentTime={playbackState.currentTime}
+              duration={duration}
+            />
           </div>
         )}
 

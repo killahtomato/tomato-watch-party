@@ -1,11 +1,12 @@
-import { getPlaybackState, restorePlayback } from './streamManager.js';
-import { getPlaybackState as getDJState, restorePlayback as restoreDJ } from './djManager.js';
-import { getWebState, restoreWeb } from './webManager.js';
+import { getPlaybackState, restorePlayback, pausePlayback } from './streamManager.js';
+import { getPlaybackState as getDJState, restorePlayback as restoreDJ, pausePlayback as pauseDJ } from './djManager.js';
+import { getWebState, restoreWeb, pauseWeb } from './webManager.js';
 import { getSkipProfile } from './skipStore.js';
 import { getRoomState, MAX_CHAT_HISTORY } from './rooms.js';
 import { tomatoResolve } from './tomatoBridge.js';
 import { buildStreamProxyUrl, streamHost } from './webProxy.js';
 import { readStateFile, writeStateFile } from './stateStore.js';
+import { getResumePolicy } from './resumePolicyStore.js';
 import { logger } from './logger.js';
 
 const INTERVAL_MS = 5000;
@@ -14,6 +15,7 @@ const DEBOUNCE_MS = 400;
 let interval = null;
 let timer = null;
 let enabled = false;
+let restoredAt = null;
 
 export function buildSnapshot() {
   const movie = getPlaybackState();
@@ -144,11 +146,25 @@ export async function applySnapshot(snapshot) {
       logger.warn(`Web restore skipped: ${err.message}`);
     }
   }
+
+  restoredAt = Date.now();
+}
+
+export function getRestoredAt() {
+  return restoredAt;
 }
 
 export async function initPersistence() {
   enabled = true;
   await applySnapshot(readStateFile());
+
+  const resumeOnStart = getResumePolicy().resumeOnStart;
+  if (!resumeOnStart) {
+    pausePlayback();
+    pauseDJ();
+    pauseWeb();
+    persistNow();
+  }
 
   if (interval) clearInterval(interval);
   interval = setInterval(persistNow, INTERVAL_MS);

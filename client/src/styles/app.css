@@ -1453,6 +1453,67 @@ video::media-controls { display: none !important; }
   color: var(--text-dim);
 }
 
+.dj-resume {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+}
+
+.resume-toggle {
+  margin-bottom: 12px;
+}
+
+.resume-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.resume-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.resume-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.resume-switch.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.resume-switch.on .resume-thumb {
+  transform: translateX(16px);
+  background: #fff;
+}
+
+.resume-note {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
 .skip-mark {
   padding: 6px 10px;
   font-size: 12px;

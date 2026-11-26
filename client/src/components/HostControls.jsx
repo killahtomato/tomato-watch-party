@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import MovieLibraryPanel from './MovieLibraryPanel.jsx';
+import ResumeToggle from './ResumeToggle.jsx';
 
 const QUALITY_PRESETS = ['1080p', '720p', '480p'];
 
-export default function HostControls({ emit, on, playbackPercent, seekRef, playRef, pauseRef, onSeekPercent, movies = [], onReorderMovies, webPanelOpen, setWebPanelOpen }) {
+export default function HostControls({ emit, on, playbackPercent, seekRef, playRef, pauseRef, onSeekPercent, movies = [], onReorderMovies, webPanelOpen, setWebPanelOpen, resumeOnStart = true, onResumePolicyChange, restoredAt }) {
   const [playbackState, setPlaybackState] = useState(null);
   const [dragTime, setDragTime] = useState(null);
   const [reactionsEnabled, setReactionsEnabled] = useState(true);
@@ -100,6 +101,14 @@ export default function HostControls({ emit, on, playbackPercent, seekRef, playR
           <span className="time">{formatTime((playbackPercent / 100) * movieDuration)} / {formatTime(movieDuration)}</span>
         </div>
       )}
+
+      <ResumeToggle
+        resumeOnStart={resumeOnStart}
+        onToggle={onResumePolicyChange}
+        restoredAt={restoredAt}
+        currentTime={(playbackPercent / 100) * movieDuration}
+        duration={movieDuration}
+      />
 
       {playbackState?.movie && movieDuration > 0 && (
         <div className="seek-bar">
