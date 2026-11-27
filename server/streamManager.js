@@ -213,6 +213,45 @@ export async function verifyPlayable(filePath) {
   }
 }
 
+const audioExtractInflight = new Map();
+
+export async function probeAudioTrackCount(movieName, quality) {
+  try {
+    const { stdout } = await execFileAsync(
+      'ffprobe',
+      ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index', '-of', 'csv=p=0', getStreamPath(movieName, quality)]
+    );
+    return stdout.trim().split(/\r?\n/).filter(Boolean).length;
+  } catch {
+    return 0;
+  }
+}
+
+export async function ensureAudioTrack(movieName, quality, index) {
+  const src = getStreamPath(movieName, quality);
+  const outDir = safeJoin(STREAM_DIR, '_audio', movieName, quality);
+  const outPath = safeJoin(outDir, `track_${index}.m4a`);
+  if (existsSync(outPath)) return outPath;
+  if (audioExtractInflight.has(outPath)) return audioExtractInflight.get(outPath);
+
+  const task = (async () => {
+    mkdirSync(outDir, { recursive: true });
+    const tmpPath = `${outPath}.tmp.m4a`;
+    try { unlinkSync(tmpPath); } catch {}
+    try {
+      await execFileAsync('ffmpeg', ['-y', '-i', src, '-map', `0:a:${index}`, '-c:a', 'copy', tmpPath]);
+      renameSync(tmpPath, outPath);
+    } catch (err) {
+      try { unlinkSync(tmpPath); } catch {}
+      throw err;
+    }
+    return outPath;
+  })().finally(() => audioExtractInflight.delete(outPath));
+
+  audioExtractInflight.set(outPath, task);
+  return task;
+}
+
 function getFreeSpace(dir) {
   try {
     const stats = statfsSync(dir);

@@ -40,7 +40,7 @@ const LANG_MAP = {
 };
 
 function formatLabel(lang, title) {
-  const langName = LANG_MAP[lang] || lang.toUpperCase();
+  const langName = LANG_MAP[lang] || (lang ? String(lang).toUpperCase() : '') || 'Unknown';
   if (title) return `${langName} (${title})`;
   return langName;
 }
@@ -63,6 +63,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
   const [volume, setVolume] = useState(1);
   const [splattering, setSplattering] = useState({});
   const [reactionsEnabled, setReactionsEnabled] = useState(true);
+  const [audioFallback, setAudioFallback] = useState(false);
   const [reactions, setReactions] = useState([]);
   const [movieEnded, setMovieEnded] = useState(false);
   const [videoError, setVideoError] = useState(false);
@@ -243,6 +244,8 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     const audio = audioRef.current;
     if (!audio || !audioUrl) return;
 
+    setAudioFallback(false);
+
     const onCanPlay = () => {
       const video = videoRef.current;
       if (video) {
@@ -252,11 +255,20 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
       audio.removeEventListener('canplay', onCanPlay);
     };
 
+    const onError = () => {
+      setAudioFallback(true);
+      addToast('Audio track unavailable — using embedded audio', 'info');
+    };
+
     audio.addEventListener('canplay', onCanPlay);
+    audio.addEventListener('error', onError);
     audio.src = audioUrl;
 
-    return () => audio.removeEventListener('canplay', onCanPlay);
-  }, [audioUrl]);
+    return () => {
+      audio.removeEventListener('canplay', onCanPlay);
+      audio.removeEventListener('error', onError);
+    };
+  }, [audioUrl, addToast]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -642,7 +654,7 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
         playsInline
         controls={false}
         disablePictureInPicture
-        muted
+        muted={!audioFallback}
         onDoubleClick={() => {
           if (document.fullscreenElement) document.exitFullscreen();
           else containerRef.current?.requestFullscreen();

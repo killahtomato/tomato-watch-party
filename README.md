@@ -163,6 +163,7 @@ The transcode tool:
 - Derives lower qualities from the master automatically (when not in HQ-only mode)
 - Validates every output before caching it, so a corrupt file is never served
 - Checks free disk space before each job and skips with a clear message if the estimate will not fit
+- `--prewarm-audio` extracts cached audio tracks while transcoding; `--audio-only` just (re)builds them for existing masters, so first playback isn't muted while extraction runs
 
 The server is **HQ-only by default**: it transcodes/caches only 1080p (at 6 Mbps) and does not derive 720p/480p. Playback still works — the stream endpoint falls back to 1080p when a lower-quality file is missing. Set `HQ_ONLY=0` in `.env` to restore automatic lower-quality derivation.
 

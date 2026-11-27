@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 const HQONLY = ["1", "true", "yes", "on"].includes(String(process.env.HQONLY || "").toLowerCase()) || process.argv.includes("--hqonly");
 const QUALITIES = HQONLY ? ["1080p"] : ["1080p", "720p", "480p"];
+const AUDIO_ONLY = process.argv.includes("--audio-only");
+const PREWARM_AUDIO = AUDIO_ONLY || process.argv.includes("--prewarm-audio");
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
   console.log("Usage: twp-transcode");
@@ -10,10 +12,12 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
   console.log("  Preserves all audio tracks and converts text subtitles to mov_text.");
   console.log("  Env: MOVIE_DIR (default ./movies), STREAM_DIR (default ./streams).");
   console.log("  Set HQONLY=1 (or pass --hqonly) to skip 720p/480p derivation.");
+  console.log("  --prewarm-audio: also extract audio tracks for each movie's 1080p master.");
+  console.log("  --audio-only: only (re)build cached audio tracks; no video transcoding.");
   process.exit(0);
 }
 
-import { getMovieDir, getStreamDirBase, isBrowserCompatible, verifyPlayable } from "./server/streamManager.js";
+import { getMovieDir, getStreamDirBase, isBrowserCompatible, verifyPlayable, ensureAudioTrack, probeAudioTrackCount } from "./server/streamManager.js";
 import { stat } from "fs/promises";
 import { dirname, join } from "path";
 import { existsSync, readFileSync, readdirSync, writeFileSync, statfsSync, mkdirSync, copyFileSync, unlinkSync } from "fs";
@@ -66,6 +70,24 @@ function estimateBytes(quality, duration) {
     return quality === "1080p" ? 10 * 1024 ** 3 : quality === "720p" ? 5 * 1024 ** 3 : 2.5 * 1024 ** 3;
   }
   return ((bitrateMbps * 1_000_000 + 128_000) / 8) * duration * 1.2;
+}
+
+async function prewarmMovieAudio(movie, streamBase) {
+  const master = join(streamBase, movie.name, "1080p.mp4");
+  if (!existsSync(master)) {
+    console.log(`    ${DIM}no 1080p master yet — skipping audio${RESET}`);
+    return false;
+  }
+  const count = await probeAudioTrackCount(movie.name, "1080p");
+  for (let i = 0; i < count; i++) {
+    try {
+      await ensureAudioTrack(movie.name, "1080p", i);
+      console.log(`    ${GREEN}♪ audio track ${i}${RESET}`);
+    } catch (err) {
+      console.log(`    ${RED}✗ audio track ${i}${RESET} ${DIM}(${err.message})${RESET}`);
+    }
+  }
+  return count > 0;
 }
 
 function pacmanBar(progress, width = 30) {
@@ -286,6 +308,16 @@ async function main() {
   const pending = movies.filter((m) => m.needsTranscode);
   const alreadyDone = movies.filter((m) => !m.needsTranscode);
 
+  if (AUDIO_ONLY) {
+    console.log(`\n${BOLD}${CYAN}  🎵 Audio prewarm${RESET} ${DIM}(${movies.length} movie(s))${RESET}\n`);
+    for (const movie of movies) {
+      console.log(`  ${BOLD}${movie.name}${RESET}`);
+      await prewarmMovieAudio(movie, streamBase);
+    }
+    console.log();
+    process.exit(0);
+  }
+
   if (alreadyDone.length > 0) {
     console.log(`  ${DIM}${alreadyDone.length} movie(s) already fully transcoded:${RESET}`);
     for (const m of alreadyDone) {
@@ -357,6 +389,10 @@ async function main() {
       } catch (err) {
         console.log(`    ${RED}✗ ${quality}${RESET} ${DIM}(${err.message})${RESET}`);
       }
+    }
+
+    if (PREWARM_AUDIO) {
+      await prewarmMovieAudio(movie, streamBase);
     }
 
     console.log();

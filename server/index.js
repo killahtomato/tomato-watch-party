@@ -12,6 +12,7 @@ import {
   getMusicDir,
   getStreamDir,
   getStreamPath,
+  ensureAudioTrack,
   initCache,
   remuxForTracks,
   safeJoin,
@@ -348,7 +349,6 @@ app.get('/api/stream-file/:movie/:quality', async (req, res) => {
 });
 
 const AUDIO_EXTRACT_DIR = join(STREAM_DIR, '_audio');
-const audioExtractInflight = new Map();
 const SUB_EXTRACT_DIR = join(STREAM_DIR, '_subs');
 const subExtractInflight = new Map();
 
@@ -388,39 +388,12 @@ app.get('/api/audio/:movie/:quality/:index', async (req, res) => {
   const outPath = safeJoin(outDir, `track_${index}.m4a`);
 
   if (!existsSync(outPath)) {
-    if (audioExtractInflight.has(outPath)) {
-      try {
-        await audioExtractInflight.get(outPath);
-      } catch (err) {
-        logger.error(`Audio extract failed: ${err.message}`);
-        return res.status(500).json({ error: 'Failed to extract audio' });
-      }
-      return res.sendFile(outPath);
-    }
-
-    const task = (async () => {
-      mkdirSync(outDir, { recursive: true });
-      const tmpPath = `${outPath}.tmp.m4a`;
-      try { unlinkSync(tmpPath); } catch {}
-      const src = getStreamPath(movieName, quality);
-      try {
-        await waitForFile(src);
-        await execFileAsync('ffmpeg', ['-y', '-i', src, '-map', `0:a:${index}`, '-c:a', 'copy', tmpPath]);
-        renameSync(tmpPath, outPath);
-      } catch (err) {
-        try { unlinkSync(tmpPath); } catch {}
-        throw err;
-      }
-    })();
-
-    audioExtractInflight.set(outPath, task);
     try {
-      await task;
+      await waitForFile(getStreamPath(movieName, quality));
+      await ensureAudioTrack(movieName, quality, index);
     } catch (err) {
       logger.error(`Audio extract failed: ${err.message}`);
       return res.status(500).json({ error: 'Failed to extract audio' });
-    } finally {
-      audioExtractInflight.delete(outPath);
     }
   }
 

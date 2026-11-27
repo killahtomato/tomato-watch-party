@@ -15,6 +15,7 @@ Commands:
   kill                      Stop server, ffmpeg jobs, tunnels and cloudflared
   party [--background|-b]   Start server + Cloudflare Tunnel (shareable URL)
   transcode [--hqonly]      Batch transcode all movies (1080p only with --hqonly)
+                            --audio-only re-extracts cached audio, --prewarm-audio extracts after transcoding
   backup [path]             Write a dated backup archive (secrets excluded)
   help                      Show this help
 
