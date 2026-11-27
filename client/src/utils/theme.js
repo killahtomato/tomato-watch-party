@@ -37,6 +37,10 @@ export const ACCENTS = [
   { id: 'volt', name: 'Volt', color: '#a7d66b' },
   { id: 'burger', name: 'Burger', color: '#e8bd6e' },
   { id: 'tactical', name: 'Tactical Lime', color: '#b4c76d' },
+  { id: 'coral', name: 'Coral', color: '#ff6f61' },
+  { id: 'aqua', name: 'Aqua', color: '#45e0d4' },
+  { id: 'lavender', name: 'Lavender', color: '#c4a7ff' },
+  { id: 'mint', name: 'Mint', color: '#7ce7b5' },
 ];
 
 export {

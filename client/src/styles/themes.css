@@ -270,6 +270,26 @@
   --accent-alt: #647938;
 }
 
+[data-accent="coral"] {
+  --accent: #ff6f61;
+  --accent-alt: #ff9c8f;
+}
+
+[data-accent="aqua"] {
+  --accent: #45e0d4;
+  --accent-alt: #8ffff2;
+}
+
+[data-accent="lavender"] {
+  --accent: #c4a7ff;
+  --accent-alt: #dccfff;
+}
+
+[data-accent="mint"] {
+  --accent: #7ce7b5;
+  --accent-alt: #b2ffd9;
+}
+
 :is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .video-player.empty,
 :is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .m-movie-empty {
   background-color: #100f0e;

@@ -49,7 +49,7 @@ If you cloned with `git clone --recursive`, step 2 is already done.
 - **Audio track switching** — Per-user audio track selection (dual audio support)
 - **Subtitle selection** — Per-user subtitle track selection with WebVTT overlay
 - **Quality selection** — 1080p, 720p, 480p with auto-switch on poor connection
-- **Themes and accents** — 18 themes and 17 accent colors, with follow-system and reduced-motion options
+- **Themes and accents** — 18 themes and 21 accent colors, with follow-system and reduced-motion options
 - **Chat** — Separate chat per room with system messages; adjustable message size
 - **Throws** — Tomatoes and popcorn with splatter animation (Movie Room)
 - **Reactions** — Emoji reactions with floating animation (🍾 💸 ❄️ 🤘 in DJ Room); the Anby themes swap these to 🍔 ⚡ 🍜 ❤️
@@ -63,7 +63,7 @@ If you cloned with `git clone --recursive`, step 2 is already done.
 
 Open the ⚙️ Settings tab on desktop or the gear in the mobile header. Preferences are stored per browser (localStorage) and apply instantly.
 
-- **Theme** — 18 themes (Tomato Dark, Light, AMOLED, Midnight, Forest, Ocean, Sunset, Sakura, Grape, Amber, Espresso, Mono, Cyberpunk, Crimson, Sepia, Anby, Silver Squad, Anby Tactical) and 17 accent colors. The Anby themes swap reaction emoji to 🍔 ⚡ 🍜 ❤️ and the radial visualizer glyph to a burger, and share an idle "waiting for the show" player: the ZZZ video-tape artwork under a tactical grid, corner brackets, mono status labels, and a pulsing burger instead of the clapper. Anby Tactical adds charcoal/gunmetal surfaces with restrained lime accents.
+- **Theme** — 18 themes (Tomato Dark, Light, AMOLED, Midnight, Forest, Ocean, Sunset, Sakura, Grape, Amber, Espresso, Mono, Cyberpunk, Crimson, Sepia, Anby, Silver Squad, Anby Tactical) and 21 accent colors. The Anby themes swap reaction emoji to 🍔 ⚡ 🍜 ❤️ and the radial visualizer glyph to a burger, and share an idle "waiting for the show" player: the ZZZ video-tape artwork under a tactical grid, corner brackets, mono status labels, and a pulsing burger instead of the clapper. Anby Tactical adds charcoal/gunmetal surfaces with restrained lime accents.
 - **Follow system theme** — match the OS color scheme.
 - **Reduce motion** — snap drawer and overlay animations instead of sliding them, and hide throw/reaction buttons and their effects for that user.
 - **Playback** — default quality, auto-play next, show subtitles, intro/credits auto-skip toggles, and default volume.
