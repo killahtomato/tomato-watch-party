@@ -15,7 +15,7 @@ export const THEMES = [
   { id: 'crimson', name: 'Crimson', swatch: ['#140a0c', '#ff4444'] },
   { id: 'sepia', name: 'Sepia', swatch: ['#f3ead8', '#c08a3e'] },
   { id: 'anby', name: 'Anby', swatch: ['#0f130d', '#a7d66b'] },
-  { id: 'anby-alt', name: 'Anby Alt', swatch: ['#181209', '#e8bd6e'] },
+  { id: 'anby-alt', name: 'Silver Squad', swatch: ['#181209', '#e8bd6e'] },
   { id: 'anby-tactical', name: 'Anby Tactical', swatch: ['#191816', '#b4c76d'] },
 ];
 

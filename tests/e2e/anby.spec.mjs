@@ -57,7 +57,7 @@ test('Anby Tactical pairs its accent, idle HUD, and reaction emoji', async ({ pa
 test('other Anby themes also use the Anby reaction set', async ({ page }) => {
   await startFixtureMovie(page, 'AnbyAltUser');
 
-  for (const [title, id] of [['Anby', 'anby'], ['Anby Alt', 'anby-alt']]) {
+  for (const [title, id] of [['Anby', 'anby'], ['Silver Squad', 'anby-alt']]) {
     await page.click('.settings-panel-tab');
     await expect(page.locator('.settings-drawer')).toHaveClass(/open/);
     await page.locator(`.theme-grid button[title="${title}"]`).click();
