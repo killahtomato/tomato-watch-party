@@ -16,7 +16,7 @@ const MOVIE_DIR = process.env.MOVIE_DIR || './movies';
 const MUSIC_DIR = process.env.MUSIC_DIR || './music';
 const STREAM_DIR = process.env.STREAM_DIR || './streams';
 const DATA_DIR = process.env.DATA_DIR || './data';
-const HQ_ONLY = ['1', 'true', 'yes', 'on'].includes(String(process.env.HQ_ONLY || '').toLowerCase());
+const HQ_ONLY = !['0', 'false', 'no', 'off'].includes(String(process.env.HQ_ONLY || '').toLowerCase());
 
 export { STREAM_DIR, DATA_DIR };
 
@@ -32,6 +32,7 @@ let isPlaying = false;
 let playbackStartTime = null;
 let playbackOffset = 0;
 let streamProcess = null;
+let transcodeTmpPath = null;
 
 let lastReportedPosition = 0;
 let lastReportTime = 0;
@@ -40,7 +41,7 @@ let transcoding = false;
 let transcodeProgress = 0;
 
 const QUALITY_PRESETS = [
-  { quality: '1080p', width: 1920, height: 1080, bitrate: '8M' },
+  { quality: '1080p', width: 1920, height: 1080, bitrate: '6M' },
   { quality: '720p', width: 1280, height: 720, bitrate: '5M' },
   { quality: '480p', width: 854, height: 480, bitrate: '2M' },
 ];
@@ -199,6 +200,19 @@ async function probeDuration(moviePath) {
   }
 }
 
+export async function verifyPlayable(filePath) {
+  try {
+    const { stdout } = await execFileAsync(
+      'ffprobe',
+      ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', filePath]
+    );
+    const duration = parseFloat(stdout.trim());
+    return Number.isFinite(duration) && duration > 0;
+  } catch {
+    return false;
+  }
+}
+
 function getFreeSpace(dir) {
   try {
     const stats = statfsSync(dir);
@@ -231,6 +245,15 @@ function ensureDiskSpace(needed, dir = STREAM_DIR) {
   if (free < needed) {
     throw new Error(`Not enough disk space: need about ${formatBytes(needed)}, only ${formatBytes(free)} free`);
   }
+}
+
+function describeFFmpegFailure(code, stderr) {
+  const text = String(stderr || '').toLowerCase();
+  if (/no space left|enospc|disk full|write error/.test(text)) {
+    return 'not enough disk space';
+  }
+  if (code === null) return 'ffmpeg was terminated';
+  return `exit code ${code}`;
 }
 
 function saveMeta(streamPath, sourceStat, complete = false) {
@@ -541,6 +564,10 @@ export async function playMovie(movieName, quality) {
     ensureDiskSpace(sourceStat.size * 1.1);
     logger.info(`Direct copy: ${movieName} (${effectiveQuality})`);
     copyFileSync(moviePath, streamPath);
+    if (!(await verifyPlayable(streamPath))) {
+      try { unlinkSync(streamPath); } catch {}
+      throw new Error('Direct copy failed validation');
+    }
     saveMeta(streamPath, sourceStat, true);
     currentMovie = movieName;
     resetPlaybackState();
@@ -562,11 +589,18 @@ export async function playMovie(movieName, quality) {
   lastReportedPosition = 0;
   lastReportTime = 0;
 
-  try {
-    streamProcess = spawn('ffmpeg', buildTranscodeArgs(moviePath, streamPath, effectiveQuality));
+  const tmpPath = `${streamPath}.tmp.mp4`;
+  transcodeTmpPath = tmpPath;
+  try { unlinkSync(tmpPath); } catch {}
 
+  try {
+    streamProcess = spawn('ffmpeg', buildTranscodeArgs(moviePath, tmpPath, effectiveQuality));
+
+    let transcodeStderr = '';
     streamProcess.stderr?.on('data', (data) => {
       const output = data.toString();
+      transcodeStderr += output;
+      if (transcodeStderr.length > 20000) transcodeStderr = transcodeStderr.slice(-20000);
       const timeMatch = output.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
       if (timeMatch && totalDuration > 0) {
         const h = parseInt(timeMatch[1]);
@@ -578,15 +612,29 @@ export async function playMovie(movieName, quality) {
       }
     });
 
-    streamProcess.on('exit', (code) => {
+    streamProcess.on('exit', async (code) => {
       transcoding = false;
-      if (code === 0) {
-        transcodeProgress = 100;
-        saveMeta(streamPath, sourceStat, true);
-        deriveQualitiesInBackground(movieName, streamPath);
-        prewarmAudioTracks(movieName, effectiveQuality);
-      }
       streamProcess = null;
+      if (code === 0) {
+        const valid = await verifyPlayable(tmpPath);
+        if (valid) {
+          try { unlinkSync(streamPath); } catch {}
+          renameSync(tmpPath, streamPath);
+          transcodeTmpPath = null;
+          transcodeProgress = 100;
+          saveMeta(streamPath, sourceStat, true);
+          deriveQualitiesInBackground(movieName, streamPath);
+          prewarmAudioTracks(movieName, effectiveQuality);
+        } else {
+          logger.error(`Transcode output failed validation: ${movieName}`);
+          try { unlinkSync(tmpPath); } catch {}
+          transcodeTmpPath = null;
+        }
+      } else {
+        logger.error(`Transcode failed (${describeFFmpegFailure(code, transcodeStderr)}): ${movieName}`);
+        try { unlinkSync(tmpPath); } catch {}
+        transcodeTmpPath = null;
+      }
       movieBroadcast?.(getPlaybackState());
     });
 
@@ -595,6 +643,8 @@ export async function playMovie(movieName, quality) {
       transcoding = false;
       transcodeProgress = 0;
       streamProcess = null;
+      try { unlinkSync(tmpPath); } catch {}
+      transcodeTmpPath = null;
     });
 
   } catch (err) {
@@ -702,11 +752,15 @@ export async function deriveQualitiesInBackground(movieName, masterPath) {
         proc.stderr?.on('data', (d) => { stderr += d.toString(); });
         proc.on('exit', (code) => {
           if (code === 0) resolve();
-          else reject(new Error(`exit code ${code}: ${stderr.slice(-200)}`));
+          else reject(new Error(`${describeFFmpegFailure(code, stderr)}: ${stderr.slice(-200)}`));
         });
         proc.on('error', reject);
       });
 
+      if (!(await verifyPlayable(outputPath))) {
+        try { unlinkSync(outputPath); } catch {}
+        throw new Error('derived output failed validation');
+      }
       const sourceStat = await stat(join(MOVIE_DIR, movieName));
       saveMeta(outputPath, sourceStat, true);
       logger.info(`Derived ${preset.quality} for ${movieName} (${stat(outputPath).size} bytes)`);
@@ -721,6 +775,10 @@ function stopTranscoding() {
     streamProcess.kill('SIGTERM');
     streamProcess = null;
   }
+  if (transcodeTmpPath) {
+    try { unlinkSync(transcodeTmpPath); } catch {}
+    transcodeTmpPath = null;
+  }
   transcoding = false;
   transcodeProgress = 0;
 }
@@ -730,21 +788,36 @@ export async function initCache() {
   if (!existsSync(STREAM_DIR)) return;
   const dirs = await readdir(STREAM_DIR);
   for (const dir of dirs) {
+    if (dir.startsWith('_')) continue;
     const dirPath = join(STREAM_DIR, dir);
     const dirStat = await stat(dirPath);
     if (!dirStat.isDirectory()) continue;
+
+    const temps = (await readdir(dirPath)).filter(f => f.endsWith('.tmp.mp4'));
+    for (const temp of temps) {
+      try { unlinkSync(join(dirPath, temp)); } catch {}
+    }
+
     for (const preset of QUALITY_PRESETS) {
       const streamPath = join(dirPath, preset.quality + '.mp4');
       if (!existsSync(streamPath)) continue;
-      if (!existsSync(getMetaPath(streamPath))) {
-        const streamStat = await stat(streamPath);
-        if (streamStat.size > 100 * 1024 * 1024) {
-          const sourcePath = join(MOVIE_DIR, dir);
-          if (existsSync(sourcePath)) {
-            saveMeta(streamPath, await stat(sourcePath), true);
-            logger.info(`Rebuilt cache: ${dir}/${preset.quality}`);
-          }
-        }
+
+      if (!(await verifyPlayable(streamPath))) {
+        try { unlinkSync(streamPath); } catch {}
+        try { unlinkSync(getMetaPath(streamPath)); } catch {}
+        logger.warn(`Invalid cache removed: ${dir}/${preset.quality}`);
+        continue;
+      }
+
+      let meta = null;
+      try { meta = getMeta(streamPath); } catch {}
+      const needsMeta = !meta || !meta.complete;
+      if (!needsMeta) continue;
+
+      const sourcePath = join(MOVIE_DIR, dir);
+      if (existsSync(sourcePath)) {
+        saveMeta(streamPath, await stat(sourcePath), true);
+        logger.info(`Rebuilt cache: ${dir}/${preset.quality}`);
       }
     }
   }

@@ -13,10 +13,10 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
   process.exit(0);
 }
 
-import { getMovieDir, getStreamDirBase } from "./server/streamManager.js";
+import { getMovieDir, getStreamDirBase, isBrowserCompatible, verifyPlayable } from "./server/streamManager.js";
 import { stat } from "fs/promises";
-import { join } from "path";
-import { existsSync, readFileSync, readdirSync, writeFileSync, statfsSync } from "fs";
+import { dirname, join } from "path";
+import { existsSync, readFileSync, readdirSync, writeFileSync, statfsSync, mkdirSync, copyFileSync, unlinkSync } from "fs";
 import { execFile, spawn } from "child_process";
 import { promisify } from "util";
 
@@ -61,7 +61,7 @@ function getFreeSpace(dir) {
 }
 
 function estimateBytes(quality, duration) {
-  const bitrateMbps = quality === "720p" ? 5 : quality === "480p" ? 2 : 8;
+  const bitrateMbps = quality === "720p" ? 5 : quality === "480p" ? 2 : 6;
   if (!duration || duration <= 0) {
     return quality === "1080p" ? 10 * 1024 ** 3 : quality === "720p" ? 5 * 1024 ** 3 : 2.5 * 1024 ** 3;
   }
@@ -130,7 +130,7 @@ async function transcodeQuality(moviePath, outputPath, quality, totalDuration, i
   }
 
   const scaleFilter = quality === "720p" ? "scale=1280:720" : quality === "480p" ? "scale=854:480" : "scale=1920:1080";
-  const bitrate = quality === "720p" ? "5M" : quality === "480p" ? "2M" : "8M";
+  const bitrate = quality === "720p" ? "5M" : quality === "480p" ? "2M" : "6M";
 
   const args = [
     "-i", moviePath,
@@ -336,7 +336,21 @@ async function main() {
       const startTime = Date.now();
 
       try {
+        if (isBrowserCompatible(moviePath)) {
+          mkdirSync(dirname(outputPath), { recursive: true });
+          copyFileSync(moviePath, outputPath);
+          if (!await verifyPlayable(outputPath)) throw new Error('copied file failed validation');
+          writeMeta(outputPath, movie.fileStat);
+          const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+          console.log(`    ${GREEN}✓ ${quality}${RESET} ${DIM}(copied, ${elapsed}s)${RESET}`);
+          continue;
+        }
+
         await transcodeQuality(moviePath, outputPath, quality, movie.duration, movie.includeSubs);
+        if (!await verifyPlayable(outputPath)) {
+          try { unlinkSync(outputPath); } catch {}
+          throw new Error('transcoded file failed validation');
+        }
         writeMeta(outputPath, movie.fileStat);
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
         console.log(`    ${GREEN}✓ ${quality}${RESET} ${DIM}(${elapsed}s)${RESET}`);

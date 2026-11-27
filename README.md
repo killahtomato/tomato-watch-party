@@ -147,11 +147,13 @@ The transcode tool:
 - Shows pacman-style progress bar with ETA
 - Skips already-transcoded files (cache check)
 - Transcodes all qualities: 1080p, 720p, 480p (or just 1080p with `HQONLY=1`)
+- Direct-copies sources that are already browser-compatible (H.264 + AAC MP4) instead of re-encoding
 - Preserves all audio tracks and converts text subtitles to mov_text
-- Derives lower qualities from the master automatically
+- Derives lower qualities from the master automatically (when not in HQ-only mode)
+- Validates every output before caching it, so a corrupt file is never served
 - Checks free disk space before each job and skips with a clear message if the estimate will not fit
 
-Set `HQ_ONLY=1` in `.env` to stop the server from deriving 720p/480p on demand. Playback still works: the stream endpoint falls back to 1080p when a lower-quality file is missing.
+The server is **HQ-only by default**: it transcodes/caches only 1080p (at 6 Mbps) and does not derive 720p/480p. Playback still works — the stream endpoint falls back to 1080p when a lower-quality file is missing. Set `HQ_ONLY=0` in `.env` to restore automatic lower-quality derivation.
 
 Audio/subtitle extraction and remux jobs write to a temp file and rename on success, so partial files are never served. Full-video remux prewarming for secondary audio tracks is off by default (it duplicates the movie per track); set `PREWARM_REMUX=1` to re-enable it, otherwise remuxes are built lazily when a track is selected.
 
