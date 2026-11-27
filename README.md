@@ -153,6 +153,8 @@ The transcode tool:
 
 Set `HQ_ONLY=1` in `.env` to stop the server from deriving 720p/480p on demand. Playback still works: the stream endpoint falls back to 1080p when a lower-quality file is missing.
 
+Audio/subtitle extraction and remux jobs write to a temp file and rename on success, so partial files are never served. Full-video remux prewarming for secondary audio tracks is off by default (it duplicates the movie per track); set `PREWARM_REMUX=1` to re-enable it, otherwise remuxes are built lazily when a track is selected.
+
 ## Remote Sharing
 
 Use Cloudflare Tunnel to share your party with friends:

@@ -1,6 +1,6 @@
 import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
-import { mkdirSync, existsSync, copyFileSync, readFileSync, writeFileSync, statfsSync } from 'fs';
+import { mkdirSync, existsSync, copyFileSync, readFileSync, writeFileSync, statfsSync, renameSync, unlinkSync } from 'fs';
 import { readdir, stat } from 'fs/promises';
 import { join, dirname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
@@ -266,6 +266,8 @@ export function getStreamDir(movieName) {
 }
 
 const REMUX_DIR = join(STREAM_DIR, '_remux');
+const PREWARM_REMUX = ['1', 'true', 'yes', 'on'].includes(String(process.env.PREWARM_REMUX || '').toLowerCase());
+const remuxInflight = new Map();
 
 export function getRemuxPath(movieName, quality, audioIdx, subIdx) {
   if (!isSafeName(movieName)) throw new Error('Invalid movie name');
@@ -277,42 +279,58 @@ export function getRemuxPath(movieName, quality, audioIdx, subIdx) {
 export async function remuxForTracks(movieName, quality, audioIdx, subIdx) {
   const remuxPath = getRemuxPath(movieName, quality, audioIdx, subIdx);
   if (existsSync(remuxPath)) return remuxPath;
+  if (remuxInflight.has(remuxPath)) return remuxInflight.get(remuxPath);
 
-  mkdirSync(dirname(remuxPath), { recursive: true });
-  const src = getStreamPath(movieName, quality);
+  const task = (async () => {
+    mkdirSync(dirname(remuxPath), { recursive: true });
+    const tmpPath = `${remuxPath}.tmp.mp4`;
+    try { unlinkSync(tmpPath); } catch {}
 
-  const args = [
-    '-i', src,
-    '-map', '0:v:0',
-    '-map', `0:a:${audioIdx}`,
-  ];
-  if (subIdx >= 0) {
-    args.push('-map', `0:s:${subIdx}`);
-  }
-  args.push(
-    '-c', 'copy',
-    '-movflags', '+faststart',
-    '-y', remuxPath
-  );
+    const src = getStreamPath(movieName, quality);
 
-  await new Promise((resolve, reject) => {
-    const proc = spawn('ffmpeg', args);
-    let stderr = '';
-    proc.stderr?.on('data', (d) => {
-      stderr += d.toString();
-      if (stderr.length > 20000) stderr = stderr.slice(-20000);
-    });
-    proc.on('exit', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-300)}`));
-    });
-    proc.on('error', reject);
-  });
+    const args = [
+      '-i', src,
+      '-map', '0:v:0',
+      '-map', `0:a:${audioIdx}`,
+    ];
+    if (subIdx >= 0) {
+      args.push('-map', `0:s:${subIdx}`);
+    }
+    args.push(
+      '-c', 'copy',
+      '-movflags', '+faststart',
+      '-y', tmpPath
+    );
 
-  return remuxPath;
+    try {
+      await new Promise((resolve, reject) => {
+        const proc = spawn('ffmpeg', args);
+        let stderr = '';
+        proc.stderr?.on('data', (d) => {
+          stderr += d.toString();
+          if (stderr.length > 20000) stderr = stderr.slice(-20000);
+        });
+        proc.on('exit', (code) => {
+          if (code === 0) resolve();
+          else reject(new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-300)}`));
+        });
+        proc.on('error', reject);
+      });
+      renameSync(tmpPath, remuxPath);
+    } catch (err) {
+      try { unlinkSync(tmpPath); } catch {}
+      throw err;
+    }
+
+    return remuxPath;
+  })().finally(() => remuxInflight.delete(remuxPath));
+
+  remuxInflight.set(remuxPath, task);
+  return task;
 }
 
 export async function prewarmAudioTracks(movieName, quality) {
+  if (!PREWARM_REMUX) return;
   try {
     const moviePath = join(MOVIE_DIR, movieName);
     const { stdout } = await execFileAsync('ffprobe', [

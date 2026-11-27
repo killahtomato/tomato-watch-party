@@ -23,7 +23,7 @@ import { getAudioFileList, isSafeRelativePath, ensureTrackCover } from './djMana
 import { getOrder } from './orderStore.js';
 import { handleWebStream } from './webProxy.js';
 import { logTomatoStatus } from './tomatoBridge.js';
-import { existsSync, mkdirSync, readFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync } from 'fs';
 import { logger } from './logger.js';
 import { migrateLegacyStateFiles } from './migrateDataDir.js';
 import { initPersistence } from './persistence.js';
@@ -348,7 +348,9 @@ app.get('/api/stream-file/:movie/:quality', async (req, res) => {
 });
 
 const AUDIO_EXTRACT_DIR = join(STREAM_DIR, '_audio');
+const audioExtractInflight = new Map();
 const SUB_EXTRACT_DIR = join(STREAM_DIR, '_subs');
+const subExtractInflight = new Map();
 
 function waitForFile(path, timeout = 1800000) {
   const start = Date.now();
@@ -386,15 +388,39 @@ app.get('/api/audio/:movie/:quality/:index', async (req, res) => {
   const outPath = safeJoin(outDir, `track_${index}.m4a`);
 
   if (!existsSync(outPath)) {
-    mkdirSync(outDir, { recursive: true });
-    const src = getStreamPath(movieName, quality);
+    if (audioExtractInflight.has(outPath)) {
+      try {
+        await audioExtractInflight.get(outPath);
+      } catch (err) {
+        logger.error(`Audio extract failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to extract audio' });
+      }
+      return res.sendFile(outPath);
+    }
 
+    const task = (async () => {
+      mkdirSync(outDir, { recursive: true });
+      const tmpPath = `${outPath}.tmp.m4a`;
+      try { unlinkSync(tmpPath); } catch {}
+      const src = getStreamPath(movieName, quality);
+      try {
+        await waitForFile(src);
+        await execFileAsync('ffmpeg', ['-y', '-i', src, '-map', `0:a:${index}`, '-c:a', 'copy', tmpPath]);
+        renameSync(tmpPath, outPath);
+      } catch (err) {
+        try { unlinkSync(tmpPath); } catch {}
+        throw err;
+      }
+    })();
+
+    audioExtractInflight.set(outPath, task);
     try {
-      await waitForFile(src);
-      await execFileAsync('ffmpeg', ['-y', '-i', src, '-map', `0:a:${index}`, '-c:a', 'copy', outPath]);
+      await task;
     } catch (err) {
       logger.error(`Audio extract failed: ${err.message}`);
       return res.status(500).json({ error: 'Failed to extract audio' });
+    } finally {
+      audioExtractInflight.delete(outPath);
     }
   }
 
@@ -419,15 +445,40 @@ app.get('/api/subs/:movie/:quality/:index', async (req, res) => {
   const outPath = safeJoin(outDir, `track_${index}.vtt`);
 
   if (!existsSync(outPath)) {
-    mkdirSync(outDir, { recursive: true });
-    const src = getStreamPath(movieName, quality);
+    if (subExtractInflight.has(outPath)) {
+      try {
+        await subExtractInflight.get(outPath);
+      } catch (err) {
+        logger.error(`Sub extract failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to extract subtitles' });
+      }
+      res.type('text/vtt');
+      return res.sendFile(outPath);
+    }
 
+    const task = (async () => {
+      mkdirSync(outDir, { recursive: true });
+      const tmpPath = `${outPath}.tmp.vtt`;
+      try { unlinkSync(tmpPath); } catch {}
+      const src = getStreamPath(movieName, quality);
+      try {
+        await waitForFile(src);
+        await execFileAsync('ffmpeg', ['-y', '-i', src, '-map', `0:s:${index}`, tmpPath]);
+        renameSync(tmpPath, outPath);
+      } catch (err) {
+        try { unlinkSync(tmpPath); } catch {}
+        throw err;
+      }
+    })();
+
+    subExtractInflight.set(outPath, task);
     try {
-      await waitForFile(src);
-      await execFileAsync('ffmpeg', ['-y', '-i', src, '-map', `0:s:${index}`, outPath]);
+      await task;
     } catch (err) {
       logger.error(`Sub extract failed: ${err.message}`);
       return res.status(500).json({ error: 'Failed to extract subtitles' });
+    } finally {
+      subExtractInflight.delete(outPath);
     }
   }
 
