@@ -20,6 +20,7 @@ async function probeIdle(page) {
       backgroundImage: getComputedStyle(el).backgroundImage,
       bracket: getComputedStyle(el, '::before').content,
       label: getComputedStyle(message, '::before').content,
+      glyph: getComputedStyle(message.querySelector('h2'), '::before').content,
     };
     el.remove();
     return result;
@@ -50,6 +51,7 @@ test('Anby Tactical pairs its accent, idle HUD, and reaction emoji', async ({ pa
   expect(idle.backgroundImage).toContain('anby-idle.webp');
   expect(idle.bracket).not.toBe('none');
   expect(idle.label).toContain('SYS://STANDBY');
+  expect(idle.glyph).toContain('🍔');
 });
 
 test('other Anby themes also use the Anby reaction set', async ({ page }) => {
@@ -65,6 +67,9 @@ test('other Anby themes also use the Anby reaction set', async ({ page }) => {
 
     const idle = await probeIdle(page);
     expect(idle.backgroundImage).toContain('anby-idle.webp');
+    expect(idle.bracket).not.toBe('none');
+    expect(idle.label).toContain('SYS://STANDBY');
+    expect(idle.glyph).toContain('🍔');
   }
 });
 
@@ -76,4 +81,5 @@ test('other themes keep their original reaction emoji and plain idle state', asy
   const idle = await probeIdle(page);
   expect(idle.backgroundImage).toBe('none');
   expect(idle.label).toBe('none');
+  expect(idle.glyph).not.toContain('🍔');
 });

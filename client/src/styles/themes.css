@@ -270,21 +270,8 @@
   --accent-alt: #647938;
 }
 
-[data-theme="anby"] .video-player.empty,
-[data-theme="anby-alt"] .video-player.empty,
-[data-theme="anby"] .m-movie-empty,
-[data-theme="anby-alt"] .m-movie-empty {
-  background-color: #100f0e;
-  background-image:
-    linear-gradient(rgba(16, 15, 14, 0.5), rgba(16, 15, 14, 0.66)),
-    url('/anby-idle.webp');
-  background-position: center;
-  background-size: cover;
-  background-repeat: no-repeat;
-}
-
-[data-theme="anby-tactical"] .video-player.empty,
-[data-theme="anby-tactical"] .m-movie-empty {
+:is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .video-player.empty,
+:is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .m-movie-empty {
   background-color: #100f0e;
   background-image:
     repeating-linear-gradient(0deg, rgba(238, 238, 237, 0.02) 0 1px, transparent 1px 3px),
@@ -298,10 +285,10 @@
   background-repeat: no-repeat;
 }
 
-[data-theme="anby-tactical"] .video-player.empty::before,
-[data-theme="anby-tactical"] .video-player.empty::after,
-[data-theme="anby-tactical"] .m-movie-empty::before,
-[data-theme="anby-tactical"] .m-movie-empty::after {
+:is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .video-player.empty::before,
+:is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .video-player.empty::after,
+:is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .m-movie-empty::before,
+:is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .m-movie-empty::after {
   content: "";
   position: absolute;
   width: 22px;
@@ -309,30 +296,30 @@
   pointer-events: none;
 }
 
-[data-theme="anby-tactical"] .video-player.empty::before,
-[data-theme="anby-tactical"] .m-movie-empty::before {
+:is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .video-player.empty::before,
+:is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .m-movie-empty::before {
   top: 16px;
   left: 16px;
   border-top: 1px solid var(--accent);
   border-left: 1px solid var(--accent);
 }
 
-[data-theme="anby-tactical"] .video-player.empty::after,
-[data-theme="anby-tactical"] .m-movie-empty::after {
+:is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .video-player.empty::after,
+:is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .m-movie-empty::after {
   right: 16px;
   bottom: 16px;
   border-right: 1px solid var(--accent);
   border-bottom: 1px solid var(--accent);
 }
 
-[data-theme="anby-tactical"] .video-player.empty .waiting-message,
-[data-theme="anby-tactical"] .m-movie-empty .m-empty-box {
+:is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .video-player.empty .waiting-message,
+:is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .m-movie-empty .m-empty-box {
   position: relative;
   z-index: 1;
 }
 
-[data-theme="anby-tactical"] .video-player.empty .waiting-message::before,
-[data-theme="anby-tactical"] .m-movie-empty .m-empty-box::before {
+:is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .video-player.empty .waiting-message::before,
+:is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .m-movie-empty .m-empty-box::before {
   display: block;
   margin-bottom: 10px;
   color: var(--accent);
@@ -342,8 +329,8 @@
   content: "SYS://STANDBY // AWAITING STREAM";
 }
 
-[data-theme="anby-tactical"] .video-player.empty .waiting-message::after,
-[data-theme="anby-tactical"] .m-movie-empty .m-empty-box::after {
+:is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .video-player.empty .waiting-message::after,
+:is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .m-movie-empty .m-empty-box::after {
   display: block;
   margin-top: 10px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -352,21 +339,21 @@
   content: "AGT-ANBY // ELECTRIC // STUN";
 }
 
-[data-theme="anby-tactical"] .video-player.empty .waiting-message h2::before {
-  content: "\25C6";
+:is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .video-player.empty .waiting-message h2::before {
+  content: "\1F354";
   color: var(--accent);
-  font-size: 22px;
-  animation: none;
+  font-size: 30px;
 }
 
-[data-theme="anby-tactical"] .m-empty-icon {
+:is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .m-empty-icon {
   font-size: 0;
 }
 
-[data-theme="anby-tactical"] .m-empty-icon::before {
+:is([data-theme="anby"], [data-theme="anby-alt"], [data-theme="anby-tactical"]) .m-empty-icon::before {
   display: block;
   margin-bottom: 12px;
   color: var(--accent);
-  font-size: 38px;
-  content: "\25C6";
+  font-size: 40px;
+  animation: pulse 1.5s ease-in-out infinite;
+  content: "\1F354";
 }
