@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useSettings } from '../hooks/useSettings.js';
+import { reactionsFor } from '../utils/anby.js';
 
 const REACTION_EMOJIS = ['👏', '😂', '😱', '❤️'];
 
@@ -70,6 +71,7 @@ export default function ThrowButton({ onThrow, on, reactionsEnabled, onReaction 
   };
 
   const isCoolingDown = (item) => throwState[item].count >= 3;
+  const reactionEmojis = reactionsFor(settings.theme, REACTION_EMOJIS);
 
   return (
     <div className="throw-controls">
@@ -103,7 +105,7 @@ export default function ThrowButton({ onThrow, on, reactionsEnabled, onReaction 
       </div>
       <div className="throw-separator"></div>
       <div className="throw-group reactions-group">
-        {REACTION_EMOJIS.map((emoji) => (
+        {reactionEmojis.map((emoji) => (
           <button
             key={emoji}
             className="throw-btn reaction-btn"

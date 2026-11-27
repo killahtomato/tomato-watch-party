@@ -14,6 +14,9 @@ export const THEMES = [
   { id: 'cyberpunk', name: 'Cyberpunk', swatch: ['#0d0a14', '#ff66aa'] },
   { id: 'crimson', name: 'Crimson', swatch: ['#140a0c', '#ff4444'] },
   { id: 'sepia', name: 'Sepia', swatch: ['#f3ead8', '#c08a3e'] },
+  { id: 'anby', name: 'Anby', swatch: ['#0f130d', '#a7d66b'] },
+  { id: 'anby-alt', name: 'Anby Alt', swatch: ['#181209', '#e8bd6e'] },
+  { id: 'anby-tactical', name: 'Anby Tactical', swatch: ['#191816', '#b4c76d'] },
 ];
 
 export const ACCENTS = [
@@ -31,6 +34,9 @@ export const ACCENTS = [
   { id: 'rose', name: 'Rose', color: '#ff5577' },
   { id: 'gold', name: 'Gold', color: '#ffd244' },
   { id: 'fuchsia', name: 'Fuchsia', color: '#ff44dd' },
+  { id: 'volt', name: 'Volt', color: '#a7d66b' },
+  { id: 'burger', name: 'Burger', color: '#e8bd6e' },
+  { id: 'tactical', name: 'Tactical Lime', color: '#b4c76d' },
 ];
 
 export {

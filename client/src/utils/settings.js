@@ -138,8 +138,14 @@ export function getAccent() {
   return getSettings().accent;
 }
 
+const THEME_ACCENTS = {
+  'anby-tactical': 'tactical',
+};
+
 export function setTheme(theme) {
-  return updateSettings({ theme, followSystem: false });
+  const patch = { theme, followSystem: false };
+  if (THEME_ACCENTS[theme]) patch.accent = THEME_ACCENTS[theme];
+  return updateSettings(patch);
 }
 
 export function setAccent(accent) {

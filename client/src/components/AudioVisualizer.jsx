@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { isAnbyTheme } from '../utils/anby.js';
 
 function readAccent() {
   const value = getComputedStyle(document.documentElement).getPropertyValue('--accent');
@@ -30,9 +31,13 @@ export default function AudioVisualizer({ audioRef, isPlaying, unlocked = true, 
   const variantRef = useRef(variant);
   variantRef.current = variant;
   const accentRef = useRef(readAccent());
+  const themeRef = useRef(typeof document !== 'undefined' ? document.documentElement.dataset.theme : '');
 
   useEffect(() => {
-    const update = () => { accentRef.current = readAccent(); };
+    const update = () => {
+      accentRef.current = readAccent();
+      themeRef.current = document.documentElement.dataset.theme;
+    };
     update();
     window.addEventListener('twp:settings', update);
     return () => window.removeEventListener('twp:settings', update);
@@ -101,7 +106,7 @@ export default function AudioVisualizer({ audioRef, isPlaying, unlocked = true, 
       canvasCtx.textBaseline = 'middle';
       canvasCtx.shadowColor = hexToRgba(accent, 0.6);
       canvasCtx.shadowBlur = 20 * dpr;
-      canvasCtx.fillText('\u{1F345}', cx, cy);
+      canvasCtx.fillText(isAnbyTheme(themeRef.current) ? '\u{1F354}' : '\u{1F345}', cx, cy);
       canvasCtx.restore();
     };
 

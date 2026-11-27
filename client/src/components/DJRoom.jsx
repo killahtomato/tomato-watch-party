@@ -5,6 +5,9 @@ import { applyOrder } from '../utils/order.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { updateSettings } from '../utils/settings.js';
 import { TRACK_SORTS, filterTracks, sortTracks, groupTracksByAlbum, computeNextTrack } from '../utils/trackList.js';
+import { reactionsFor } from '../utils/anby.js';
+
+const DJ_REACTION_EMOJIS = ['🍾', '💸', '❄️', '🤘'];
 
 export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActive = true, seekRef, playRef, pauseRef, onSeekPercent, onPercentUpdate, playbackPercent = 0, resumeOnStart = true, onResumePolicyChange, restoredAt }) {
   const audioRef = useRef(null);
@@ -396,6 +399,8 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
     emit('dj:reaction', { emoji });
   }, [emit]);
 
+  const reactionEmojis = reactionsFor(settings.theme, DJ_REACTION_EMOJIS);
+
   const renderTrack = (track, index) => (
     <button
       key={track.name}
@@ -594,7 +599,7 @@ export default function DJRoom({ emit, on, sessionData, isDJ, onDJLogin, isActiv
 
         {reactionsEnabled && !settings.reduceMotion && (
           <div className="dj-reaction-bar">
-            {['🍾', '💸', '❄️', '🤘'].map(emoji => (
+            {reactionEmojis.map(emoji => (
               <button key={emoji} className="dj-reaction-btn" onClick={() => handleReaction(emoji)}>
                 {emoji}
               </button>

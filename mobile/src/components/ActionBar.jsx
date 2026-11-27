@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSettings } from '@client/hooks/useSettings.js';
+import { reactionsFor } from '@client/utils/anby.js';
 
 const MOVIE_REACTIONS = ['👏', '😂', '😱', '❤️'];
 const DJ_REACTIONS = ['🍾', '💸', '❄️', '🤘'];
@@ -61,6 +62,8 @@ export default function ActionBar({ room, on, emit }) {
     else emit('dj:reaction', { emoji });
   }, [emit, room]);
 
+  const reactionEmojis = reactionsFor(settings.theme, room === 'movie' ? MOVIE_REACTIONS : DJ_REACTIONS);
+
   if (settings.reduceMotion) return null;
 
   return (
@@ -86,7 +89,7 @@ export default function ActionBar({ room, on, emit }) {
         </div>
       )}
       <div className="mobile-action-group">
-        {(room === 'movie' ? MOVIE_REACTIONS : DJ_REACTIONS).map(emoji => (
+        {reactionEmojis.map(emoji => (
           <button
             key={emoji}
             className="mobile-action-btn"
