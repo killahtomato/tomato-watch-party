@@ -136,15 +136,22 @@ Docker: the image installs `ffmpeg` and `curl` and copies the submodule, and `do
 # Batch transcode all movies with progress bar
 ./twp-transcode
 
+# 1080p only (skips 720p/480p)
+HQONLY=1 ./twp-transcode
+# or: ./twp-transcode --hqonly
+
 # Or transcode on-demand (automatic when selecting a movie)
 ```
 
 The transcode tool:
 - Shows pacman-style progress bar with ETA
 - Skips already-transcoded files (cache check)
-- Transcodes all qualities: 1080p, 720p, 480p
+- Transcodes all qualities: 1080p, 720p, 480p (or just 1080p with `HQONLY=1`)
 - Preserves all audio tracks and converts text subtitles to mov_text
 - Derives lower qualities from the master automatically
+- Checks free disk space before each job and skips with a clear message if the estimate will not fit
+
+Set `HQ_ONLY=1` in `.env` to stop the server from deriving 720p/480p on demand. Playback still works: the stream endpoint falls back to 1080p when a lower-quality file is missing.
 
 ## Remote Sharing
 

@@ -1,6 +1,6 @@
 import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
-import { mkdirSync, existsSync, copyFileSync, readFileSync, writeFileSync } from 'fs';
+import { mkdirSync, existsSync, copyFileSync, readFileSync, writeFileSync, statfsSync } from 'fs';
 import { readdir, stat } from 'fs/promises';
 import { join, dirname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
@@ -16,6 +16,7 @@ const MOVIE_DIR = process.env.MOVIE_DIR || './movies';
 const MUSIC_DIR = process.env.MUSIC_DIR || './music';
 const STREAM_DIR = process.env.STREAM_DIR || './streams';
 const DATA_DIR = process.env.DATA_DIR || './data';
+const HQ_ONLY = ['1', 'true', 'yes', 'on'].includes(String(process.env.HQ_ONLY || '').toLowerCase());
 
 export { STREAM_DIR, DATA_DIR };
 
@@ -195,6 +196,40 @@ async function probeDuration(moviePath) {
     return parseFloat(stdout.trim());
   } catch {
     return 0;
+  }
+}
+
+function getFreeSpace(dir) {
+  try {
+    const stats = statfsSync(dir);
+    return stats.bavail * stats.bsize;
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+function formatBytes(bytes) {
+  const gb = bytes / 1024 ** 3;
+  if (gb >= 1) return `${gb.toFixed(1)} GB`;
+  return `${(bytes / 1024 ** 2).toFixed(0)} MB`;
+}
+
+async function estimateQualityBytes(quality, duration, moviePath) {
+  const preset = QUALITY_PRESETS.find(p => p.quality === quality);
+  if (!preset) return 0;
+  const bits = (parseFloat(preset.bitrate) * 1_000_000) + 128_000;
+  let secs = duration;
+  if (!secs || secs <= 0) secs = await probeDuration(moviePath);
+  if (!secs || secs <= 0) {
+    return preset.width >= 1920 ? 10 * 1024 ** 3 : preset.width >= 1280 ? 5 * 1024 ** 3 : 2.5 * 1024 ** 3;
+  }
+  return (bits / 8) * secs * 1.2;
+}
+
+function ensureDiskSpace(needed, dir = STREAM_DIR) {
+  const free = getFreeSpace(dir);
+  if (free < needed) {
+    throw new Error(`Not enough disk space: need about ${formatBytes(needed)}, only ${formatBytes(free)} free`);
   }
 }
 
@@ -482,7 +517,10 @@ export async function playMovie(movieName, quality) {
 
   getStreamDir(movieName);
 
+  const totalDuration = await probeDuration(moviePath);
+
   if (await isBrowserCompatible(moviePath)) {
+    ensureDiskSpace(sourceStat.size * 1.1);
     logger.info(`Direct copy: ${movieName} (${effectiveQuality})`);
     copyFileSync(moviePath, streamPath);
     saveMeta(streamPath, sourceStat, true);
@@ -492,6 +530,7 @@ export async function playMovie(movieName, quality) {
     return getPlaybackState();
   }
 
+  ensureDiskSpace(await estimateQualityBytes(effectiveQuality, totalDuration, moviePath));
   logger.info(`Transcoding: ${movieName} (${effectiveQuality})`);
 
   saveMeta(streamPath, sourceStat, false);
@@ -506,8 +545,6 @@ export async function playMovie(movieName, quality) {
   lastReportTime = 0;
 
   try {
-    const totalDuration = await probeDuration(moviePath);
-
     streamProcess = spawn('ffmpeg', buildTranscodeArgs(moviePath, streamPath, effectiveQuality));
 
     streamProcess.stderr?.on('data', (data) => {
@@ -606,11 +643,21 @@ export async function changeQuality(movieName, newQuality) {
 }
 
 export async function deriveQualitiesInBackground(movieName, masterPath) {
+  if (HQ_ONLY) return;
   const derivations = QUALITY_PRESETS.filter(p => p.quality !== DEFAULT_QUALITY);
+  const moviePath = join(MOVIE_DIR, movieName);
+  const duration = await probeDuration(moviePath);
 
-  await Promise.all(derivations.map(async (preset) => {
+  for (const preset of derivations) {
     const outputPath = getStreamPath(movieName, preset.quality);
-    if (existsSync(outputPath)) return;
+    if (existsSync(outputPath)) continue;
+
+    const needed = await estimateQualityBytes(preset.quality, duration, moviePath);
+    const free = getFreeSpace(STREAM_DIR);
+    if (free < needed) {
+      logger.warn(`Derive skipped for ${preset.quality}: need about ${formatBytes(needed)}, only ${formatBytes(free)} free`);
+      continue;
+    }
 
     const ffmpegArgs = [
       '-i', masterPath,
@@ -648,7 +695,7 @@ export async function deriveQualitiesInBackground(movieName, masterPath) {
     } catch (err) {
       logger.error(`Derive failed: ${err.message}`);
     }
-  }));
+  }
 }
 
 function stopTranscoding() {

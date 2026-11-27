@@ -1,23 +1,26 @@
 #!/usr/bin/env node
+const HQONLY = ["1", "true", "yes", "on"].includes(String(process.env.HQONLY || "").toLowerCase()) || process.argv.includes("--hqonly");
+const QUALITIES = HQONLY ? ["1080p"] : ["1080p", "720p", "480p"];
+
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
   console.log("Usage: twp-transcode");
   console.log("  Batch transcode all movies in the movies folder.");
   console.log("  Skips movies already fully transcoded (checks .meta.json cache).");
-  console.log("  Transcodes all qualities: 1080p, 720p, 480p.");
+  console.log(`  Transcodes ${HQONLY ? "1080p only" : "all qualities: 1080p, 720p, 480p"}.`);
   console.log("  Preserves all audio tracks and converts text subtitles to mov_text.");
   console.log("  Env: MOVIE_DIR (default ./movies), STREAM_DIR (default ./streams).");
+  console.log("  Set HQONLY=1 (or pass --hqonly) to skip 720p/480p derivation.");
   process.exit(0);
 }
 
 import { getMovieDir, getStreamDirBase } from "./server/streamManager.js";
 import { stat } from "fs/promises";
 import { join } from "path";
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync, statfsSync } from "fs";
 import { execFile, spawn } from "child_process";
 import { promisify } from "util";
 
 const execFileAsync = promisify(execFile);
-const QUALITIES = ["1080p", "720p", "480p"];
 const IMAGE_SUB_CODECS = new Set(["pgssub", "dvd_subtitle", "vobsub", "dvb_subtitle", "hdmv_pgs_subtitle"]);
 
 const RED = "\x1b[31m";
@@ -45,7 +48,24 @@ function formatTime(seconds) {
 function formatSize(bytes) {
   if (bytes > 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
   if (bytes > 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(0)} MB`;
-  return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 ** 2).toFixed(0)} KB`;
+}
+
+function getFreeSpace(dir) {
+  try {
+    const stats = statfsSync(dir);
+    return stats.bavail * stats.bsize;
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+function estimateBytes(quality, duration) {
+  const bitrateMbps = quality === "720p" ? 5 : quality === "480p" ? 2 : 8;
+  if (!duration || duration <= 0) {
+    return quality === "1080p" ? 10 * 1024 ** 3 : quality === "720p" ? 5 * 1024 ** 3 : 2.5 * 1024 ** 3;
+  }
+  return ((bitrateMbps * 1_000_000 + 128_000) / 8) * duration * 1.2;
 }
 
 function pacmanBar(progress, width = 30) {
@@ -192,6 +212,9 @@ function writeMeta(outputPath, sourceStat) {
 
 async function main() {
   console.log(`\n${BOLD}${CYAN}  🍅 Tomato Watch Party — Batch Transcoder${RESET}\n`);
+  if (HQONLY) {
+    console.log(`  ${YELLOW}HQONLY enabled — only 1080p will be transcoded.${RESET}\n`);
+  }
 
   const movieDir = getMovieDir();
   const streamBase = getStreamDirBase();
@@ -299,6 +322,13 @@ async function main() {
 
       if (existing) {
         console.log(`    ${GREEN}✓ ${quality}${RESET} ${DIM}(already done)${RESET}`);
+        continue;
+      }
+
+      const needed = estimateBytes(quality, movie.duration);
+      const free = getFreeSpace(streamBase);
+      if (free < needed) {
+        console.log(`    ${RED}⚠ ${quality} skipped${RESET} ${DIM}(need ~${formatSize(needed)}, only ${formatSize(free)} free)${RESET}`);
         continue;
       }
 
