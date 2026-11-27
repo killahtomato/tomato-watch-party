@@ -6,6 +6,15 @@
 # (default ./data) IS included.
 set -euo pipefail
 
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  echo "Usage: twp-backup [path]"
+  echo "  Write a dated backup archive of Tomato Watch Party."
+  echo "  Default output: TWP_BACKUP_DIR (or ~/Work/backups)/watch-party-<timestamp>.tar.gz"
+  echo "  Excludes secrets (.env*), dependencies, media, logs, and existing archives."
+  echo "  Includes persistent app state under DATA_DIR (default ./data)."
+  exit 0
+fi
+
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$PROJECT_DIR")"
 PROJECT="$(basename "$PROJECT_DIR")"

@@ -1,28 +1,65 @@
-#!/bin/bash
-# Launch the Movie Stream server
+#!/usr/bin/env bash
+set -euo pipefail
 
-cd "$(dirname "$0")"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-if [ ! -d "server/node_modules" ]; then
-  echo "Installing server dependencies..."
-  cd server && npm install && cd ..
-fi
+print_help() {
+  cat <<'EOF'
+Tomato Watch Party — command launcher
 
-if [ ! -d "client/node_modules" ]; then
-  echo "Installing client dependencies..."
-  cd client && npm install && cd ..
-fi
+Usage:
+  twp <command> [args...]
 
-if [ ! -d "mobile/node_modules" ]; then
-  echo "Installing mobile dependencies..."
-  cd mobile && npm install && cd ..
-fi
+Commands:
+  start [--background|-b]   Start the server on http://localhost:3000
+  kill                      Stop server, ffmpeg jobs, tunnels and cloudflared
+  party [--background|-b]   Start server + Cloudflare Tunnel (shareable URL)
+  transcode [--hqonly]      Batch transcode all movies (1080p only with --hqonly)
+  backup [path]             Write a dated backup archive (secrets excluded)
+  help                      Show this help
 
-echo "Building client..."
-cd client && npm run build && cd ..
+Environment:
+  HQONLY=1                  1080p-only batch transcoding (same as --hqonly)
+  TWP_BACKUP_DIR            Backup output directory (default ~/Work/backups)
+  HQ_ONLY                   Server derives no lower qualities by default; set HQ_ONLY=0 to enable
+  PREWARM_REMUX=1           Pre-create full-video remuxes for alternate audio tracks
 
-echo "Building mobile..."
-cd mobile && npm run build && cd ..
+Examples:
+  ./twp start
+  ./twp party --background
+  ./twp transcode --hqonly
+  ./twp backup
+EOF
+}
 
-echo "Starting Movie Stream server..."
-cd server && node index.js
+case "${1:-}" in
+  ""|-h|--help|help)
+    print_help
+    exit 0
+    ;;
+  start)
+    shift
+    exec "$SCRIPT_DIR/twp-start" "$@"
+    ;;
+  kill)
+    shift
+    exec "$SCRIPT_DIR/twp-kill" "$@"
+    ;;
+  party)
+    shift
+    exec "$SCRIPT_DIR/twp-party" "$@"
+    ;;
+  transcode)
+    shift
+    exec "$SCRIPT_DIR/twp-transcode" "$@"
+    ;;
+  backup)
+    shift
+    exec "$SCRIPT_DIR/twp-backup" "$@"
+    ;;
+  *)
+    echo "twp: unknown command '$1'" >&2
+    print_help >&2
+    exit 1
+    ;;
+esac

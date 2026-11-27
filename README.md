@@ -35,12 +35,23 @@ If you cloned with `git clone --recursive`, step 2 is already done.
 
 | Command | Description |
 |---------|-------------|
+| `./twp --help` | Show every command and launcher usage |
+| `./twp start\|kill\|party\|transcode\|backup` | Run any helper below with args forwarded |
 | `./twp-start` | Start server on http://localhost:3000 (detached) |
 | `./twp-kill` | Stop server, ffmpeg, tunnels, and cloudflared |
 | `./twp-party` | Start server + Cloudflare Tunnel for remote friends |
 | `./twp-party --background` | Same as above, but daemonizes and exits |
 | `./twp-transcode` | Batch transcode all movies (pacman progress bar) |
 | `./twp-backup [path]` | Write a dated backup archive (secrets excluded, persistent state included) |
+
+Launcher examples:
+
+```bash
+./twp start              # local server
+./twp party --background # remote sharing, detached
+./twp transcode --hqonly # 1080p-only batch
+./twp backup             # dated archive in ~/Work/backups
+```
 
 ## Features
 
@@ -198,7 +209,7 @@ npm run build:mobile   # production build into mobile/dist
 
 The mobile app is a PWA: on mobile browsers you can add it to your home screen and it opens full-screen.
 
-Mobile viewers pick their audio track with a server-side remux, cached in `streams/_remux`. The server pre-warms the alternate tracks when a movie starts, so switching is usually instant; the cache can be deleted to reclaim disk space.
+Mobile viewers pick their audio track with a server-side remux, cached in `streams/_remux`. Remuxes are created lazily when a track is selected; set `PREWARM_REMUX=1` to pre-create them when playback starts (uses more disk — each is a full-video copy). Delete `streams/_remux` to reclaim the space.
 
 ## Docker
 
