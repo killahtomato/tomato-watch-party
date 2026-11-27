@@ -270,14 +270,32 @@
   --accent-alt: #647938;
 }
 
+[data-theme="anby"] .video-player.empty,
+[data-theme="anby-alt"] .video-player.empty,
+[data-theme="anby"] .m-movie-empty,
+[data-theme="anby-alt"] .m-movie-empty {
+  background-color: #100f0e;
+  background-image:
+    linear-gradient(rgba(16, 15, 14, 0.5), rgba(16, 15, 14, 0.66)),
+    url('/anby-idle.webp');
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
 [data-theme="anby-tactical"] .video-player.empty,
 [data-theme="anby-tactical"] .m-movie-empty {
-  background:
+  background-color: #100f0e;
+  background-image:
     repeating-linear-gradient(0deg, rgba(238, 238, 237, 0.02) 0 1px, transparent 1px 3px),
     linear-gradient(rgba(180, 199, 109, 0.05) 1px, transparent 1px),
     linear-gradient(90deg, rgba(180, 199, 109, 0.05) 1px, transparent 1px),
-    radial-gradient(circle at 50% 42%, rgba(180, 199, 109, 0.1), transparent 58%);
-  background-size: 100% 100%, 26px 26px, 26px 26px, 100% 100%;
+    radial-gradient(circle at 50% 42%, rgba(180, 199, 109, 0.1), transparent 58%),
+    linear-gradient(rgba(16, 15, 14, 0.5), rgba(16, 15, 14, 0.66)),
+    url('/anby-idle.webp');
+  background-position: center;
+  background-size: 100% 100%, 26px 26px, 26px 26px, 100% 100%, 100% 100%, cover;
+  background-repeat: no-repeat;
 }
 
 [data-theme="anby-tactical"] .video-player.empty::before,
