@@ -45,6 +45,11 @@ export default function WebHostControls({ emit, webState, seekRef, playRef, paus
     emit('web:resync', {});
   }, [emit]);
 
+  const handleStop = useCallback(() => {
+    pauseRef?.current?.();
+    emit('web:ended', {});
+  }, [pauseRef, emit]);
+
   const handleReactionsToggle = useCallback(() => {
     setReactionsEnabled((prev) => {
       const next = !prev;
@@ -214,6 +219,7 @@ export default function WebHostControls({ emit, webState, seekRef, playRef, paus
               {webState?.isPlaying ? '⏸ Pause' : current > 0 ? '▶ Resume' : '▶ Play'}
             </button>
             <button onClick={handleResync} title="Force audience to resync">🔄 Resync</button>
+            <button onClick={handleStop} className="stop-btn" title="Stop the stream">⏹ Stop</button>
           </>
         )}
         <label className="reactions-toggle">

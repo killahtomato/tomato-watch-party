@@ -68,7 +68,10 @@ export async function makeFixtures(dirs) {
   return { moviePath, musicPath };
 }
 
+const tokenCache = new Map();
+
 export async function fetchHostToken(baseURL = 'http://127.0.0.1:3100') {
+  if (tokenCache.has(`host:${baseURL}`)) return tokenCache.get(`host:${baseURL}`);
   const response = await fetch(`${baseURL}/api/host/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -76,10 +79,12 @@ export async function fetchHostToken(baseURL = 'http://127.0.0.1:3100') {
   });
   const body = await response.json();
   if (!body.token) throw new Error(`host login failed: ${JSON.stringify(body)}`);
+  tokenCache.set(`host:${baseURL}`, body.token);
   return body.token;
 }
 
 export async function fetchDjToken(baseURL = 'http://127.0.0.1:3100') {
+  if (tokenCache.has(`dj:${baseURL}`)) return tokenCache.get(`dj:${baseURL}`);
   const response = await fetch(`${baseURL}/api/dj/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -87,6 +92,7 @@ export async function fetchDjToken(baseURL = 'http://127.0.0.1:3100') {
   });
   const body = await response.json();
   if (!body.token) throw new Error(`dj login failed: ${JSON.stringify(body)}`);
+  tokenCache.set(`dj:${baseURL}`, body.token);
   return body.token;
 }
 

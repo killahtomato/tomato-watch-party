@@ -38,6 +38,11 @@ export default function HostControls({ emit, on, playbackPercent, seekRef, playR
     emit('host:resume', {});
   };
 
+  const handleStop = useCallback(() => {
+    if (pauseRef?.current) pauseRef.current();
+    emit('host:ended', {});
+  }, [emit, pauseRef]);
+
   const movieDuration = playbackState?.movie
     ? movies.find((m) => m.name === playbackState.movie)?.duration || 0
     : 0;
@@ -149,6 +154,7 @@ export default function HostControls({ emit, on, playbackPercent, seekRef, playR
               </button>
             )}
             <button onClick={handleResync} title="Force audience to resync">🔄 Resync</button>
+            <button onClick={handleStop} className="stop-btn" title="Stop the movie">⏹ Stop</button>
           </>
         )}
         <label className="reactions-toggle">

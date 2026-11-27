@@ -1,4 +1,4 @@
-export const ANBY_THEMES = ['anby-tactical'];
+export const ANBY_THEMES = ['anby', 'anby-alt', 'anby-tactical'];
 
 export const ANBY_REACTIONS = ['🍔', '⚡', '🍜', '❤️'];
 

@@ -13,5 +13,5 @@ test('guest can join and send chat messages', async ({ page }) => {
 
 test('join produces a system message', async ({ page }) => {
   await joinRoom(page, 'Bob');
-  await expect(page.locator('.chat-msg.system').first()).toContainText('joined');
+  await expect(page.locator('.chat-msg.system').filter({ hasText: 'joined' }).first()).toContainText('joined');
 });

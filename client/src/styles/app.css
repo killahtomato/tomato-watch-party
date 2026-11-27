@@ -732,6 +732,11 @@ video::media-controls { display: none !important; }
   background: var(--surface-light);
 }
 
+.host-buttons .stop-btn {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .movie-list h4 {
   font-size: 12px;
   text-transform: uppercase;
