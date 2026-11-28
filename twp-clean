@@ -1,0 +1,431 @@
+#!/usr/bin/env node
+import { verifyPlayable, QUALITY_PRESETS } from "./server/streamManager.js";
+import { existsSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, statfsSync } from "fs";
+import { dirname, isAbsolute, join, sep } from "path";
+import { fileURLToPath } from "url";
+import { createInterface } from "readline";
+import { stdin, stdout } from "process";
+
+const ROOT = dirname(fileURLToPath(import.meta.url));
+const resolveDir = (value, fallback) =>
+  isAbsolute(value || "") ? value : join(ROOT, value || fallback);
+const MOVIE_DIR = resolveDir(process.env.MOVIE_DIR, "./movies");
+const STREAM_BASE = resolveDir(process.env.STREAM_DIR, "./streams");
+
+const RED = "\x1b[31m";
+const GREEN = "\x1b[32m";
+const YELLOW = "\x1b[33m";
+const CYAN = "\x1b[36m";
+const BOLD = "\x1b[1m";
+const DIM = "\x1b[2m";
+const RESET = "\x1b[0m";
+
+const VIDEO_EXTENSIONS = [".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".wmv", ".m4v"];
+const DEFAULT_QUALITY = QUALITY_PRESETS[0].quality;
+const TEMP_SUFFIXES = [".tmp.mp4", ".tmp.m4a", ".tmp.vtt"];
+
+const args = process.argv.slice(2);
+const flags = new Set(args.filter((a) => a.startsWith("-")));
+const has = (...names) => names.some((n) => flags.has(n));
+
+const DRY_RUN = has("--dry-run");
+const ASSUME_YES = has("--yes");
+const ALL = has("--all");
+const ARTIFACTS = has("--artifacts") || has("--art");
+const HELP = has("--help", "-h");
+
+const movieFilterIdx = args.indexOf("--movie");
+const movieFilter = movieFilterIdx >= 0 ? String(args[movieFilterIdx + 1] || "").toLowerCase() : null;
+
+const CATEGORIES = [
+  { id: "invalid", flag: "--invalid", label: "Invalid/corrupt master files", safe: true },
+  { id: "tmp", flag: "--tmp", label: "Temporary leftovers", safe: true },
+  { id: "lower", flag: "--lower", label: `Lower qualities (everything below ${DEFAULT_QUALITY})`, safe: true },
+  { id: "remux", flag: "--remux", label: "Remux cache (streams/_remux)", safe: true },
+  { id: "audio", flag: "--audio", label: "Audio extracts (streams/_audio)", safe: true },
+  { id: "subs", flag: "--subs", label: "Subtitle extracts (streams/_subs)", safe: true },
+  { id: "stale", flag: "--stale", label: "Stale masters (source changed)", safe: false },
+  { id: "orphans", flag: "--orphans", label: "Orphan stream dirs (no matching source)", safe: false },
+];
+
+const ARTIFACT_DIRS = ["test-results", "playwright-report", "blob-report", ".playwright"];
+const ARTIFACT_FILES = ["server.log", "cloudflared.log"];
+
+function printHelp() {
+  console.log("Usage: twp clean [flags]");
+  console.log("  Interactive cleanup of caches and junk (default when run in a terminal).");
+  console.log();
+  console.log("Flags:");
+  console.log("  --dry-run          Report only; never delete or prompt.");
+  console.log("  --yes              Skip the confirmation prompt.");
+  console.log(`  --all              Safe set: invalid, tmp, lower qualities, remux/audio/subs caches.`);
+  console.log("  --invalid          Invalid/corrupt master files (fail validation)");
+  console.log("  --tmp              *.tmp.mp4 / .tmp.m4a / .tmp.vtt leftovers");
+  console.log("  --lower            Lower qualities (720p/480p)");
+  console.log("  --remux            streams/_remux");
+  console.log("  --audio            streams/_audio");
+  console.log("  --subs             streams/_subs");
+  console.log("  --stale            Masters whose source changed since transcoding");
+  console.log("  --orphans          Stream dirs with no matching movie file");
+  console.log("  --artifacts        Dev/test artifacts (test-results/, playwright-report/, logs)");
+  console.log("  --movie <text>     Only items whose path contains <text>");
+  console.log();
+  console.log("Examples:");
+  console.log("  ./twp clean                       # interactive menu");
+  console.log("  ./twp clean --dry-run             # report everything");
+  console.log("  ./twp clean --all --yes           # safe set, no prompt");
+  console.log("  ./twp clean --lower --audio --yes");
+}
+
+function formatSize(bytes) {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(0)} MB`;
+  return `${(bytes / 1024).toFixed(0)} KB`;
+}
+
+function freeSpace(dir) {
+  try {
+    const stats = statfsSync(dir);
+    return stats.bavail * stats.bsize;
+  } catch {
+    return 0;
+  }
+}
+
+function isVideoName(name) {
+  const ext = name.slice(name.lastIndexOf(".")).toLowerCase();
+  return VIDEO_EXTENSIONS.includes(ext);
+}
+
+function dirSize(dir) {
+  let total = 0;
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  for (const entry of entries) {
+    const p = join(dir, entry.name);
+    try {
+      if (entry.isDirectory()) total += dirSize(p);
+      else if (entry.isFile()) total += statSync(p).size;
+    } catch {}
+  }
+  return total;
+}
+
+function matchesFilter(path) {
+  if (!movieFilter) return true;
+  return path.toLowerCase().includes(movieFilter);
+}
+
+function readMeta(metaPath) {
+  try {
+    return JSON.parse(readFileSync(metaPath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function findTempFiles(base) {
+  const found = [];
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const p = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(p);
+      } else if (entry.isFile()) {
+        if (TEMP_SUFFIXES.some((suffix) => entry.name.endsWith(suffix)) || /\.manual-.*\.m4a$/.test(entry.name)) {
+          try {
+            found.push({ path: p, size: statSync(p).size });
+          } catch {}
+        }
+      }
+    }
+  };
+  walk(base);
+  return found;
+}
+
+async function scan() {
+  const items = [];
+
+  let sourceNames = new Set();
+  try {
+    sourceNames = new Set(readdirSync(MOVIE_DIR).filter(isVideoName));
+  } catch {}
+
+  if (!existsSync(STREAM_BASE)) {
+    return { items, sourceCount: sourceNames.size };
+  }
+
+  for (const entry of readdirSync(STREAM_BASE)) {
+    const dirPath = join(STREAM_BASE, entry);
+    let stat;
+    try {
+      stat = statSync(dirPath);
+    } catch {
+      continue;
+    }
+    if (!stat.isDirectory() || entry.startsWith("_")) continue;
+
+    const orphan = !sourceNames.has(entry);
+    if (orphan) {
+      if (matchesFilter(dirPath)) {
+        items.push({ cat: "orphans", path: dirPath, size: dirSize(dirPath), dir: true });
+      }
+      continue;
+    }
+
+    let srcStat = null;
+    try {
+      srcStat = statSync(join(MOVIE_DIR, entry));
+    } catch {}
+
+    for (const preset of QUALITY_PRESETS) {
+      const file = join(dirPath, `${preset.quality}.mp4`);
+      if (!existsSync(file) || !matchesFilter(file)) continue;
+
+      const size = statSync(file).size;
+      const meta = readMeta(`${file}.meta.json`);
+      const complete = Boolean(meta && meta.complete);
+
+      if (!complete || !(await verifyPlayable(file))) {
+        items.push({ cat: "invalid", path: file, size });
+        continue;
+      }
+
+      if (srcStat && (meta.sourceSize !== srcStat.size || meta.sourceMtime !== srcStat.mtimeMs)) {
+        items.push({ cat: "stale", path: file, size });
+        continue;
+      }
+
+      if (preset.quality !== DEFAULT_QUALITY) {
+        items.push({ cat: "lower", path: file, size });
+      }
+    }
+  }
+
+  for (const temp of findTempFiles(STREAM_BASE)) {
+    if (matchesFilter(temp.path)) items.push({ cat: "tmp", path: temp.path, size: temp.size });
+  }
+
+  for (const [id, sub] of [["remux", "_remux"], ["audio", "_audio"], ["subs", "_subs"]]) {
+    const p = join(STREAM_BASE, sub);
+    if (!existsSync(p)) continue;
+    const size = dirSize(p);
+    if (size > 0 && matchesFilter(p)) items.push({ cat: id, path: p, size, dir: true });
+  }
+
+  if (ARTIFACTS) {
+    for (const name of ARTIFACT_DIRS) {
+      const p = join(ROOT, name);
+      if (!existsSync(p)) continue;
+      const size = dirSize(p);
+      if (size > 0 && matchesFilter(p)) items.push({ cat: "artifacts", path: p, size, dir: true });
+    }
+    for (const name of ARTIFACT_FILES) {
+      const p = join(ROOT, name);
+      if (!existsSync(p)) continue;
+      try {
+        const size = statSync(p).size;
+        if (size > 0 && matchesFilter(p)) items.push({ cat: "artifacts", path: p, size });
+      } catch {}
+    }
+  }
+
+  return { items, sourceCount: sourceNames.size };
+}
+
+function summarize(items) {
+  const rows = [];
+  for (const cat of [...CATEGORIES, { id: "artifacts", label: "Dev/test artifacts" }]) {
+    const list = items.filter((it) => it.cat === cat.id);
+    if (list.length === 0) continue;
+    rows.push({
+      id: cat.id,
+      label: cat.label,
+      count: list.length,
+      size: list.reduce((sum, it) => sum + it.size, 0),
+      list,
+    });
+  }
+  return rows;
+}
+
+function printReport(rows, { dryRun }) {
+  console.log(`\n${BOLD}${CYAN}  🍅 Tomato Watch Party — Cleanup${RESET}\n`);
+  console.log(`  ${DIM}Movies: ${MOVIE_DIR}${RESET}`);
+  console.log(`  ${DIM}Streams: ${STREAM_BASE}${RESET}`);
+  console.log(`  ${DIM}Free space now: ${formatSize(freeSpace(STREAM_BASE))}${RESET}\n`);
+
+  if (rows.length === 0) {
+    console.log(`  ${GREEN}Nothing to clean. All caches look healthy.${RESET}\n`);
+    return 0;
+  }
+
+  let total = 0;
+  for (const row of rows) {
+    total += row.size;
+    console.log(`  ${BOLD}${row.label}${RESET} ${DIM}(${row.count} item${row.count === 1 ? "" : "s"}, ${formatSize(row.size)})${RESET}`);
+    for (const it of row.list.slice(0, 10)) {
+      console.log(`    ${DIM}- ${it.path.replace(ROOT + sep, "")}${RESET}`);
+    }
+    if (row.list.length > 10) {
+      console.log(`    ${DIM}… and ${row.list.length - 10} more${RESET}`);
+    }
+  }
+
+  console.log(`\n  ${BOLD}Projected reclaim:${RESET} ${GREEN}${formatSize(total)}${RESET}`);
+  if (dryRun) {
+    console.log(`  ${DIM}Dry run — nothing was deleted.${RESET}\n`);
+  }
+  return total;
+}
+
+function prompt(question) {
+  return new Promise((resolve) => {
+    const rl = createInterface({ input: stdin, output: stdout });
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
+
+async function runMenu(rows) {
+  const selected = new Set(rows.filter((r) => CATEGORIES.find((c) => c.id === r.id)?.safe).map((r) => r.id));
+
+  for (;;) {
+    console.log(`\n${BOLD}Select categories to clean:${RESET}`);
+    const visible = rows.map((row, idx) => {
+      const mark = selected.has(row.id) ? `${GREEN}[x]${RESET}` : "[ ]";
+      console.log(`  ${mark} ${idx + 1}. ${row.label} ${DIM}(${formatSize(row.size)})${RESET}`);
+    });
+    console.log(`  ${DIM}${visible.length + 1}. all safe categories${RESET}`);
+    console.log(`  ${DIM}${visible.length + 2}. none${RESET}`);
+    const answer = (await prompt("\nToggle numbers (e.g. 2,4), 'all', 'none', or Enter to continue: ")).toLowerCase();
+
+    if (!answer) break;
+    if (answer === "all") {
+      for (const row of rows) {
+        if (CATEGORIES.find((c) => c.id === row.id)?.safe) selected.add(row.id);
+      }
+      continue;
+    }
+    if (answer === "none") {
+      selected.clear();
+      continue;
+    }
+    for (const token of answer.split(/[\s,]+/).filter(Boolean)) {
+      const n = Number(token);
+      if (!Number.isInteger(n) || n < 1 || n > rows.length) continue;
+      const id = rows[n - 1].id;
+      if (selected.has(id)) selected.delete(id);
+      else selected.add(id);
+    }
+  }
+
+  return selected;
+}
+
+async function main() {
+  if (HELP) {
+    printHelp();
+    return 0;
+  }
+
+  const { items } = await scan();
+  const rows = summarize(items);
+  const explicit = CATEGORIES.filter((c) => flags.has(c.flag)).map((c) => c.id);
+  const interactive = stdin.isTTY && !DRY_RUN && !ASSUME_YES;
+  const reportOnly = DRY_RUN || (!stdin.isTTY && explicit.length === 0 && !ALL);
+
+  let selected = new Set();
+
+  if (explicit.length > 0 || ALL) {
+    if (ALL) {
+      for (const c of CATEGORIES) {
+        if (c.safe && rows.some((r) => r.id === c.id)) selected.add(c.id);
+      }
+    }
+    for (const id of explicit) selected.add(id);
+    if (ARTIFACTS) selected.add("artifacts");
+  } else if (interactive) {
+    selected = await runMenu(rows);
+  } else {
+    for (const row of rows) selected.add(row.id);
+  }
+
+  if (reportOnly) {
+    printReport(rows, { dryRun: true });
+    return 0;
+  }
+
+  const chosen = rows.filter((row) => selected.has(row.id)).flatMap((row) => row.list);
+  if (chosen.length === 0) {
+    console.log(`\n${GREEN}Nothing selected. No changes made.${RESET}\n`);
+    return 0;
+  }
+
+  printReport(rows.filter((row) => selected.has(row.id)), { dryRun: false });
+
+  if (!ASSUME_YES) {
+    const total = chosen.reduce((sum, it) => sum + it.size, 0);
+    const answer = (await prompt(`\n${YELLOW}Delete ${chosen.length} item(s), freeing about ${formatSize(total)}? [y/N]: ${RESET}`)).toLowerCase();
+    if (answer !== "y" && answer !== "yes") {
+      console.log(`\n${DIM}Cancelled.${RESET}\n`);
+      return 0;
+    }
+  }
+
+  const before = freeSpace(STREAM_BASE);
+  const keptDirs = [];
+  let freed = 0;
+  let removed = 0;
+  const failures = [];
+
+  const ordered = [...chosen].sort((a, b) => b.path.length - a.path.length);
+  for (const it of ordered) {
+    if (keptDirs.some((d) => !it.dir && it.path.startsWith(d + sep))) continue;
+    try {
+      rmSync(it.path, { recursive: Boolean(it.dir), force: true });
+      if (!it.dir) {
+        try { unlinkSync(`${it.path}.meta.json`); } catch {}
+      }
+      freed += it.size;
+      removed += 1;
+      keptDirs.push(it.path);
+      console.log(`  ${GREEN}✓${RESET} ${DIM}${it.path.replace(ROOT + sep, "")}${RESET}`);
+    } catch (err) {
+      failures.push(`${it.path}: ${err.message}`);
+    }
+  }
+
+  const after = freeSpace(STREAM_BASE);
+  console.log(`\n  ${BOLD}Removed:${RESET} ${removed} item(s)`);
+  console.log(`  ${BOLD}Freed:${RESET} ${GREEN}${formatSize(freed)}${RESET}`);
+  console.log(`  ${BOLD}Free space:${RESET} ${formatSize(before)} → ${formatSize(after)}\n`);
+  if (failures.length > 0) {
+    console.log(`  ${RED}Failures (${failures.length}):${RESET}`);
+    for (const failure of failures) console.log(`    ${RED}- ${failure}${RESET}`);
+    return 1;
+  }
+  return 0;
+}
+
+main()
+  .then((code) => {
+    process.exitCode = code;
+  })
+  .catch((err) => {
+    console.error(`\n  ${RED}Fatal error: ${err.message}${RESET}\n`);
+    process.exitCode = 1;
+  });

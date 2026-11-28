@@ -40,7 +40,7 @@ let lastReportTime = 0;
 let transcoding = false;
 let transcodeProgress = 0;
 
-const QUALITY_PRESETS = [
+export const QUALITY_PRESETS = [
   { quality: '1080p', width: 1920, height: 1080, bitrate: '6M' },
   { quality: '720p', width: 1280, height: 720, bitrate: '5M' },
   { quality: '480p', width: 854, height: 480, bitrate: '2M' },

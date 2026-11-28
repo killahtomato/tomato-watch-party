@@ -17,6 +17,7 @@ Commands:
   transcode [--hqonly]      Batch transcode all movies (1080p only with --hqonly)
                             --audio-only re-extracts cached audio, --prewarm-audio extracts after transcoding
   backup [path]             Write a dated backup archive (secrets excluded)
+  clean [flags]             Clean caches/junk (interactive by default)
   help                      Show this help
 
 Environment:
@@ -57,6 +58,10 @@ case "${1:-}" in
   backup)
     shift
     exec "$SCRIPT_DIR/twp-backup" "$@"
+    ;;
+  clean)
+    shift
+    exec "$SCRIPT_DIR/twp-clean" "$@"
     ;;
   *)
     echo "twp: unknown command '$1'" >&2
