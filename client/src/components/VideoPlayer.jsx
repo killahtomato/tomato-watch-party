@@ -256,6 +256,12 @@ export default function VideoPlayer({ userName, isHost, emit, on, sessionData, o
     };
 
     const onError = () => {
+      const video = videoRef.current;
+      if (video) {
+        video.muted = false;
+        video.volume = 1;
+      }
+      audio.pause();
       setAudioFallback(true);
       addToast('Audio track unavailable — using embedded audio', 'info');
     };

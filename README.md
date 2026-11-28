@@ -43,7 +43,7 @@ If you cloned with `git clone --recursive`, step 2 is already done.
 | `./twp-party --background` | Same as above, but daemonizes and exits |
 | `./twp-transcode` | Batch transcode all movies (pacman progress bar) |
 | `./twp-backup [path]` | Write a dated backup archive (secrets excluded, persistent state included) |
-| `./twp clean [flags]` | Interactive cleanup of invalid caches, temp files, lower qualities, and regenerable `_remux`/`_audio`/`_subs` caches (`--dry-run`, `--all`, `--yes`) |
+| `./twp clean [flags]` | Interactive cleanup of invalid caches, temp files, lower qualities, and regenerable `_remux`/`_audio`/`_subs` caches (`--dry-run`, `--all`, `--yes`, `--keep-audio`) |
 
 Launcher examples:
 

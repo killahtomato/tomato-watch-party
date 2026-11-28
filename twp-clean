@@ -32,6 +32,7 @@ const DRY_RUN = has("--dry-run");
 const ASSUME_YES = has("--yes");
 const ALL = has("--all");
 const ARTIFACTS = has("--artifacts") || has("--art");
+const KEEP_AUDIO = has("--keep-audio");
 const HELP = has("--help", "-h");
 
 const movieFilterIdx = args.indexOf("--movie");
@@ -65,6 +66,7 @@ function printHelp() {
   console.log("  --remux            streams/_remux");
   console.log("  --audio            streams/_audio");
   console.log("  --subs             streams/_subs");
+  console.log("  --keep-audio       With --all/menu, keep audio extracts (avoid first-play extraction delay)");
   console.log("  --stale            Masters whose source changed since transcoding");
   console.log("  --orphans          Stream dirs with no matching movie file");
   console.log("  --artifacts        Dev/test artifacts (test-results/, playwright-report/, logs)");
@@ -301,7 +303,7 @@ function prompt(question) {
 }
 
 async function runMenu(rows) {
-  const selected = new Set(rows.filter((r) => CATEGORIES.find((c) => c.id === r.id)?.safe).map((r) => r.id));
+  const selected = new Set(rows.filter((r) => CATEGORIES.find((c) => c.id === r.id)?.safe && !(KEEP_AUDIO && r.id === "audio")).map((r) => r.id));
 
   for (;;) {
     console.log(`\n${BOLD}Select categories to clean:${RESET}`);
@@ -316,7 +318,8 @@ async function runMenu(rows) {
     if (!answer) break;
     if (answer === "all") {
       for (const row of rows) {
-        if (CATEGORIES.find((c) => c.id === row.id)?.safe) selected.add(row.id);
+        const cat = CATEGORIES.find((c) => c.id === row.id);
+        if (cat?.safe && !(KEEP_AUDIO && row.id === "audio")) selected.add(row.id);
       }
       continue;
     }
@@ -353,7 +356,7 @@ async function main() {
   if (explicit.length > 0 || ALL) {
     if (ALL) {
       for (const c of CATEGORIES) {
-        if (c.safe && rows.some((r) => r.id === c.id)) selected.add(c.id);
+        if (c.safe && !(KEEP_AUDIO && c.id === "audio") && rows.some((r) => r.id === c.id)) selected.add(c.id);
       }
     }
     for (const id of explicit) selected.add(id);
@@ -417,6 +420,10 @@ async function main() {
     console.log(`  ${RED}Failures (${failures.length}):${RESET}`);
     for (const failure of failures) console.log(`    ${RED}- ${failure}${RESET}`);
     return 1;
+  }
+  if (selected.has("audio") || selected.has("subs")) {
+    console.log(`  ${YELLOW}Note:${RESET} audio/subtitle extracts were removed; they regenerate on demand.`);
+    console.log(`  ${DIM}Run ./twp transcode --audio-only to rebuild them now and avoid a first-play delay.${RESET}\n`);
   }
   return 0;
 }
