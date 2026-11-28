@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+server/node_modules/
+client/node_modules/
+
+# Build output
+client/dist/
+mobile/dist/
+
+# HLS segments (ephemeral)
+hls/
+
+# Media libraries and transcoded streams (data)
+movies/
+music/
+streams/
+
+# Persistent app state (order, skip profiles, resume)
+data/
+
+# Backup archives
+*.tar.gz
+
+# Environment / secrets (keep the example template tracked)
+.env
+.env.local
+.env.*
+!.env.example
+
+# Playwright / test artifacts
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Logs
+*.log
+npm-debug.log*
+cloudflared.log
